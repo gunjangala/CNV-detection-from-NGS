@@ -1,0 +1,226 @@
+#!/bin/bash
+#PBS -V
+#PBS -N ntr_data
+#PBS -o /scratch/ggg256/Lab/Structural_Variants/ntr_data/oe
+#PBS -e /scratch/ggg256/Lab/Structural_Variants/ntr_data/oe
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=25GB
+#PBS -l walltime=48:00:00
+#PBS -M gunjan.gala@nyu.edu
+#PBS -t 76-87
+
+#################################################
+
+RUNDIR="/scratch/ggg256/Lab/Structural_Variants/ntr_data"
+cd $RUNDIR
+
+module purge
+module load bwa/gnu/0.7.13
+module load samtools/intel/1.3     
+module load pindel/intel/0.2.5a4
+module load pysam/intel/0.9.0
+module load ipython
+module load numpy/intel/1.9.2
+module load bedtools/intel/2.25.0
+module load speedseq/intel/20151204
+module load lumpy/intel/0.2.13
+module load breakdancer/intel/1.1.2
+module load cnvnator/intel/0.3.2
+module load ROOT/intel/5.34.18
+module load jdk/1.8.0_65
+module load perl/intel/5.18.2
+module load fastqc
+module load picard-tools/1.129
+module load r/intel/3.2.2
+module load rstudio
+PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
+
+##################################################
+# running array jobs on all the ntr data
+for i in {76..87}
+do
+
+##################################################
+#mkdir ntr_${PBS_ARRAYID}
+cd ntr_${PBS_ARRAYID}
+ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+cp /scratch/cgsb/gencore/out/Gresham/2015-10-23_HK5NHBGXX/lib65-90/HK5NHBGXX_combined_n01_ntr_${PBS_ARRAYID}.fastq.gz .
+cp /scratch/cgsb/gencore/out/Gresham/2015-10-23_HK5NHBGXX/lib65-90/HK5NHBGXX_combined_n02_ntr_${PBS_ARRAYID}.fastq.gz .
+gunzip *n01*
+gunzip *n02*
+fastq1=HK5NHBGXX_combined_n01_ntr_${PBS_ARRAYID}.fastq
+fastq2=HK5NHBGXX_combined_n02_ntr_${PBS_ARRAYID}.fastq
+
+# fastqc analysis
+fastqc $fastq1
+fastqc $fastq2
+#########################################################################################################
+# performing bwa mem algorithm, sorting,indexing using samtools
+bwa mem -t 16 $ref $fastq1 $fastq2 > ntr_${PBS_ARRAYID}.sam
+samtools view -bS ntr_${PBS_ARRAYID}.sam > ntr_${PBS_ARRAYID}.bam
+
+samtools sort ntr_${PBS_ARRAYID}.bam > ntr_${PBS_ARRAYID}.sorted.bam
+
+samtools index ntr_${PBS_ARRAYID}.sorted.bam
+
+# obtaining alignment metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectAlignmentSummaryMetrics \
+R=$ref \
+I=ntr_${PBS_ARRAYID}.sorted.bam \
+O=ntr_${PBS_ARRAYID}_alignment_metrics.txt 
+
+# obtaining insert size metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectInsertSizeMetrics \
+INPUT=ntr_${PBS_ARRAYID}.sorted.bam  \
+OUTPUT=ntr_${PBS_ARRAYID}_insert_metrics.txt \
+HISTOGRAM_FILE=ntr_${PBS_ARRAYID}_insert_size_histogram.pdf 
+
+# obtaining read depth ie coverage using samtools
+samtools depth -a ntr_${PBS_ARRAYID}.sorted.bam > ntr_${PBS_ARRAYID}_RD.txt
+
+# removing duplicates from the sorted bam file and building index using picard
+java -jar $PICARD_JAR \
+MarkDuplicates \
+INPUT=ntr_${PBS_ARRAYID}.sorted.bam  \
+OUTPUT=ntr_${PBS_ARRAYID}_rm_dup.bam \
+METRICS_FILE=ntr_${PBS_ARRAYID}_rmdup_metrics.txt \
+REMOVE_DUPLICATES=true
+
+java -jar $PICARD_JAR \
+BuildBamIndex \
+INPUT=ntr_${PBS_ARRAYID}_rm_dup.bam
+
+#########################################################################################################
+# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
+bam1=ntr_${PBS_ARRAYID}_rm_dup.bam
+bam=ntr_${PBS_ARRAYID}.sorted.bam
+#########################################################################################################
+# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
+Rscript /home/ggg256/scripts/read_depth_for_bin_size.R -r ntr_${PBS_ARRAYID}_RD.txt \
+> ntr_${PBS_ARRAYID}_readDepth.txt
+
+bin_size="$(cat ntr_${PBS_ARRAYID}_readDepth.txt|replace \" ""|replace [1] "" )"
+
+
+#########################################################################################################
+
+bam2cfg.pl $bam -h > ntr_${PBS_ARRAYID}_bd.cfg
+
+breakdancer-max ntr_${PBS_ARRAYID}_bd.cfg > ntr_${PBS_ARRAYID}_bd_output
+
+python /home/ggg256/scripts/parse_breakdancer.py -f ntr_${PBS_ARRAYID}_bd_output -t DEL > ntr_${PBS_ARRAYID}_bd.txt
+
+echo "breakdancer done"
+
+#########################################################################################################
+########################################################
+
+mean_insert_size="$(less ntr_${PBS_ARRAYID}_bd.cfg | cut -f9)"
+mean_IS="$echo `expr substr $mean_insert_size 6 8`" 
+
+
+echo "${bam} ${mean_IS} ntr_${PBS_ARRAYID}" > config_ntr_${PBS_ARRAYID}.txt
+
+/share/apps/pindel/0.2.5a4/intel/bin/pindel \
+ -T 16 \
+ -f $ref \
+ -i config_ntr_${PBS_ARRAYID}.txt \
+ -c ALL \
+ -o ntr_${PBS_ARRAYID}_output
+
+echo "pindel done & now running python scripts"
+
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ntr_${PBS_ARRAYID}_output_D > ntr_${PBS_ARRAYID}_pindel.txt
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ntr_${PBS_ARRAYID}_output_TD >> ntr_${PBS_ARRAYID}_pindel.txt
+
+echo "pindel all done"
+
+#########################################################################################################
+# obtaining individual fasta files from reference file in the "same directory"
+# this step is very important for cnvnator to work
+python /home/ggg256/scripts/fasta_to_each_chr.py
+
+cnvnator \
+-root ntr_${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-unique
+
+cnvnator \
+-root ntr_${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-his ${bin_size}
+
+cnvnator \
+-root ntr_${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-stat ${bin_size}
+
+cnvnator \
+-root ntr_${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-partition ${bin_size}
+
+cnvnator \
+-root ntr_${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-call ${bin_size} > ntr_${PBS_ARRAYID}_cnvnator.txt
+
+python /home/ggg256/scripts/parse_cnvnator.py -f ntr_${PBS_ARRAYID}_cnvnator.txt -t deletion > ntr_${PBS_ARRAYID}_cnv.txt
+python /home/ggg256/scripts/parse_cnvnator.py -f ntr_${PBS_ARRAYID}_cnvnator.txt -t duplication >> ntr_${PBS_ARRAYID}_cnv.txt
+
+# deleting the individual fasta files to save space
+rm *fa
+
+echo "cnvnator done"
+
+#########################################################################################################
+# aligning data with SpeedSeq, which performs BWA-MEM alignment,
+# marks duplicates and extracts split and discordant read-pairs.
+speedseq align -R "@RG\tID:id\tSM:ntr_${PBS_ARRAYID}\tLB:lib" \
+$ref \
+$fastq1 \
+$fastq2 \
+
+echo "speedseq done"
+
+/share/apps/lumpy/0.2.13/intel/scripts/lumpyexpress \
+-B ${fastq1}.bam \
+-S ${fastq1}.splitters.bam \
+-D ${fastq1}.discordants.bam \
+-o ${fastq1}_lumpy.vcf
+
+mv ${fastq1}_lumpy.vcf ntr_${PBS_ARRAYID}_lumpy.vcf
+
+python  /home/ggg256/scripts/parse_lumpy.py -f ntr_${PBS_ARRAYID}_lumpy.vcf > ntr_${PBS_ARRAYID}_lumpy.txt
+
+echo "lumpy done"
+
+######################################################################################
+
+cp /home/ggg256/scripts/analyzing_for_CNVs.Rmd .
+
+Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" \
+-p ntr_${PBS_ARRAYID}_pindel.txt \
+-c ntr_${PBS_ARRAYID}_cnv.txt \
+-l ntr_${PBS_ARRAYID}_lumpy.txt \
+-r ntr_${PBS_ARRAYID}_RD.txt
+
+mv cnv.xls ntr_${PBS_ARRAYID}.xls
+
+mv figure ntr_${PBS_ARRAYID}_figure
+
+cat analyzing_for_CNVs.md | replace "figure" "ntr_${PBS_ARRAYID}_figure" > tmp_${PBS_ARRAYID}.md
+cat tmp_${PBS_ARRAYID}.md | replace "Analyzing for CNVs" "ntr_${PBS_ARRAYID} CNV Analysis" > ntr_${PBS_ARRAYID}_algorithmic_output.md
+
+######################################################################################
+
+done
+
+exit 0;

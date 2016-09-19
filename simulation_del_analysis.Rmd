@@ -1,0 +1,176 @@
+---
+title: "FDR and sensitivity"
+author: "Gunjan"
+output: html_document
+---
+```{r}
+# transfer all .bed files in same directory and then do : grep "" .bed > simBed.txt
+
+# use the following on command line
+# Rscript *.md \
+# -d coverage \
+# -s simBedfile \
+# -p pindel \
+# -c cnvnator \
+# -l lumpy \
+```
+
+
+```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("GenomicRanges")
+require(GenomicRanges)
+
+#install.packages("tidyr",repos = "http://cran.us.r-project.org")
+#install.packages("dplyr",repos = "http://cran.us.r-project.org")
+library(tidyr)
+library(dplyr)
+library(optparse)
+library(knitr)
+```
+
+```{r reading in the files,echo=FALSE}
+
+option_list <- list(
+  make_option(c("-d", "--depth"),action = "store",default = NULL,help="coverage of simulation"),
+  make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
+  make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
+  make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
+  make_option(c("-s", "--simBed"),action = "store",default = NULL,help="simBed file"))
+
+opt = parse_args(OptionParser(option_list=option_list))
+
+simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
+simBed <- simBed[simBed$chrom!="chr17",]
+
+#breakdancer <- read.csv(opt$b, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+#breakdancer <- (separate(data =breakdancer, col =V1, into = c("sim", "V1"), sep = "_bd.txt:"))
+#breakdancer <- breakdancer[breakdancer$V2!="chr17",]
+
+pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
+colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
+p_provide <- pind[(pind$V2=="Provide"),]
+pindel <- (pind %>% anti_join(p_provide))
+pindel <- pindel[pindel$V3!="chr17",]
+
+cnvnator <- read.csv(opt$c, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
+cnvnator <- cnvnator[cnvnator$V2!="chr17",]
+
+lumpy <- read.csv(opt$l, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
+lumpy<- lumpy[lumpy$V2!="chr17",]
+```
+
+```{r data structures,echo=FALSE}
+colnames(pindel)<-c("sim","svtype","chrom.1","start","end","size","supporting.reads")
+colnames(cnvnator)<-c("sim","svtype","chrom.1","start","end","size","normRDsignal")
+colnames(lumpy)<-c("sim","svtype","chrom.1","start","end","size")
+#colnames(breakdancer)<-c("sim","svtype","chrom.1","start","chrom.2","end","size","supporting.reads")
+colnames(simBed) <- c("sim","chrom.1","start","chrom.2","end","svtype")
+
+simBed$sim <- as.character(simBed$sim)
+simBed$chrom.1 <- as.character(simBed$chrom.1)
+simBed$chrom.2 <- as.character(simBed$chrom.2)
+simBed$svtype <- as.character(simBed$svtype)
+simBed$start <- as.integer(simBed$start)
+simBed$end <- as.integer(simBed$end)
+
+pindel$sim <- as.character(pindel$sim)
+pindel$svtype <- as.character(pindel$svtype)
+pindel$chrom.1 <- as.character(pindel$chrom.1)
+pindel$start <- as.integer(pindel$start)
+pindel$end <- as.integer(pindel$end)
+pindel$size <- as.integer(pindel$size)
+pindel$supporting.reads <- as.integer(pindel$supporting.reads)
+
+#breakdancer$sim <- as.character(breakdancer$sim)
+#breakdancer$svtype <- as.character(breakdancer$svtype)
+#breakdancer$chrom.1 <- as.character(breakdancer$chrom.1)
+#breakdancer$chrom.2 <- as.character(breakdancer$chrom.2)
+#breakdancer$start <- as.integer(breakdancer$start)
+#breakdancer$end <- as.integer(breakdancer$end)
+#breakdancer$size <- as.integer(breakdancer$size)
+#breakdancer$supporting.reads <- as.integer(breakdancer$supporting.reads)
+
+cnvnator$sim <- as.character(cnvnator$sim)
+cnvnator$svtype <- as.character(cnvnator$svtype)
+cnvnator$chrom.1 <- as.character(cnvnator$chrom.1)
+cnvnator$start <- as.integer(cnvnator$start)
+cnvnator$end <- as.integer(cnvnator$end)
+cnvnator$size <- as.integer(cnvnator$size)
+cnvnator$normRDsignal <- as.numeric(cnvnator$normRDsignal)
+
+lumpy$sim <- as.character(lumpy$sim)
+lumpy$svtype <- as.character(lumpy$svtype)
+lumpy$chrom.1 <- as.character(lumpy$chrom.1)
+lumpy$start <- as.integer(lumpy$start)
+lumpy$end <- as.integer(lumpy$end)
+lumpy$size <- as.integer(abs(lumpy$size))
+```
+
+```{r filtering,echo=FALSE}
+pindel.del <- pindel[pindel$svtype=="D" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv.del <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>50 & (cnvnator$normRDsignal) < 0.2 ,]
+lumpy.del <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
+#breakdancer.del <- breakdancer[breakdancer$svtype=="DEL" & breakdancer$size>50 & breakdancer$supporting.reads>10 ,]
+sim.del <- simBed[simBed$svtype=="DEL",]
+
+#pindel.dup <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+#cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal)>1.8 ,]
+#lumpy.dup <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
+#sim.dup <- simBed[simBed$svtype=="DUP",]
+```
+
+
+```{r Granges,warning=FALSE}
+
+gRange.object <- function (object){
+  sim <- object$sim
+  chr <- object$chrom.1 
+  start <- object$start
+  end <- object$end
+  gR <- GRanges(seqnames = paste0(sim,chr), ranges = IRanges(start=start, end=end))
+  return (gR)
+}
+
+scores <- function (query,subject) {
+  sim <- gRange.object(subject)
+  test <- gRange.object(query)
+  res <- countOverlaps(test,sim,type="any")
+  FDR <- round(((length(res[res==0]))/(length(res))),2)
+  sensitivity <-  round((length(res[res==1])) / ((length(sim))),2)
+  analysis <-t(as.data.frame(as.matrix(c(FDR,sensitivity))))
+  colnames(analysis) <- c("FDR","sensitivity")
+  rownames(analysis) <- paste0(opt$d,deparse(substitute(query)))
+  return (analysis)
+}
+
+
+cnv.del.analysis<-scores(cnv.del,sim.del)
+#breakdancer.del.analysis<-scores(breakdancer.del,sim.del)
+lumpy.del.analysis<-scores(lumpy.del,sim.del)
+pindel.del.analysis<-scores(pindel.del,sim.del)
+
+# breakdancer.dup.analysis<-scores(breakdancer.dup,sim.dup)
+#cnv.dup.analysis<-scores(cnv.dup,sim.dup)
+#lumpy.dup.analysis<-scores(lumpy.dup,sim.dup)
+#pindel.dup.analysis<-scores(pindel.dup,sim.dup)
+
+final <- (rbind(cnv.del.analysis,
+          lumpy.del.analysis,
+          pindel.del.analysis))
+          #cnv.dup.analysis,
+          #lumpy.dup.analysis,
+          #pindel.dup.analysis))
+final
+
+
+write.csv(final, file = paste0(opt$d,".xls"))
+
+```
+
+
+

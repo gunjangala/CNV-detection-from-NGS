@@ -1,0 +1,215 @@
+#!/bin/bash
+#PBS -V
+#PBS -N sim100_dup_2
+#PBS -o /scratch/ggg256/Lab/Structural_Variants/simulations/oe
+#PBS -e /scratch/ggg256/Lab/Structural_Variants/simulations/oe
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=25GB
+#PBS -l walltime=48:00:00
+#PBS -M ggg256@nyu.edu
+#PBS -t 1-100
+
+##########################################################################
+module purge
+module load bwa/gnu/0.7.13
+module load samtools/intel/1.3
+module load pindel/intel/0.2.5a4
+module load pysam/intel/0.9.0
+module load ipython
+module load numpy/intel/1.9.2
+module load bedtools/intel/2.25.0
+module load speedseq/intel/20151204
+module load lumpy/intel/0.2.13
+module load breakdancer/intel/1.1.2
+module load cnvnator/intel/0.3.2
+module load ROOT/intel/5.34.18
+module load jdk/1.8.0_65
+module load perl/intel/5.18.2
+module load fastqc
+module load picard-tools/1.129
+module load r/intel/3.2.2
+module load rstudio
+PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
+###########################################################################
+
+ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+
+RUNDIR=/scratch/ggg256/Lab/Structural_Variants/simulations/duplications/100x
+
+cd $RUNDIR/sim${PBS_ARRAYID}
+
+fastq1=$RUNDIR/sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq
+fastq2=$RUNDIR/sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
+
+#############################################################################
+
+bwa mem -t 16 $ref $fastq1 $fastq2 > sim${PBS_ARRAYID}.sam
+samtools view -bS sim${PBS_ARRAYID}.sam > sim${PBS_ARRAYID}.bam
+samtools sort sim${PBS_ARRAYID}.bam > sim${PBS_ARRAYID}.sorted.bam
+samtools index sim${PBS_ARRAYID}.sorted.bam
+
+# obtaining alignment metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectAlignmentSummaryMetrics \
+R=$ref \
+I=sim${PBS_ARRAYID}.sorted.bam \
+O=sim${PBS_ARRAYID}_alignment_metrics.txt 
+
+# obtaining insert size metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectInsertSizeMetrics \
+INPUT=sim${PBS_ARRAYID}.sorted.bam  \
+OUTPUT=sim${PBS_ARRAYID}_insert_metrics.txt \
+HISTOGRAM_FILE=sim${PBS_ARRAYID}_insert_size_histogram.pdf 
+
+# obtaining read depth ie coverage using samtools
+samtools depth -a sim${PBS_ARRAYID}.sorted.bam > sim${PBS_ARRAYID}_RD.txt
+
+# removing duplicates from the sorted bam file and building index using picard
+java -jar $PICARD_JAR \
+MarkDuplicates \
+INPUT=sim${PBS_ARRAYID}.sorted.bam  \
+OUTPUT=sim${PBS_ARRAYID}_rm_dup.bam \
+METRICS_FILE=sim${PBS_ARRAYID}_rmdup_metrics.txt \
+REMOVE_DUPLICATES=true
+
+java -jar $PICARD_JAR \
+BuildBamIndex \
+INPUT=sim${PBS_ARRAYID}_rm_dup.bam
+
+#########################################################################################################
+# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
+bam1=sim${PBS_ARRAYID}_rm_dup.bam
+bam=sim${PBS_ARRAYID}.sorted.bam
+#########################################################################################################
+# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
+Rscript /home/ggg256/scripts/read_depth_for_bin_size.R -r sim${PBS_ARRAYID}_RD.txt \
+> sim${PBS_ARRAYID}_readDepth.txt
+
+bin_size="$(cat sim${PBS_ARRAYID}_readDepth.txt|replace \" ""|replace [1] "" )"
+
+
+#########################################################################################################
+
+bam2cfg.pl $bam -h > sim${PBS_ARRAYID}_bd.cfg
+
+breakdancer-max sim${PBS_ARRAYID}_bd.cfg > sim${PBS_ARRAYID}_bd_output
+
+python /home/ggg256/scripts/parse_breakdancer.py -f sim${PBS_ARRAYID}_bd_output -t DEL > sim${PBS_ARRAYID}_bd.txt
+
+echo "breakdancer done"
+
+#########################################################################################################
+########################################################
+
+mean_insert_size="$(less sim${PBS_ARRAYID}_bd.cfg | cut -f9)"
+mean_IS="$echo `expr substr $mean_insert_size 6 8`" 
+
+
+echo "${bam} ${mean_IS} sim${PBS_ARRAYID}" > config_sim${PBS_ARRAYID}.txt
+
+/share/apps/pindel/0.2.5a4/intel/bin/pindel \
+ -T 16 \
+ -f $ref \
+ -i config_sim${PBS_ARRAYID}.txt \
+ -c ALL \
+ -o sim${PBS_ARRAYID}_output
+
+echo "pindel done & now running python scripts"
+
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f sim${PBS_ARRAYID}_output_D > sim${PBS_ARRAYID}_pindel.txt
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f sim${PBS_ARRAYID}_output_TD >> sim${PBS_ARRAYID}_pindel.txt
+
+echo "pindel all done"
+
+#########################################################################################################
+# obtaining individual fasta files from reference file in the "same directory"
+# this step is very important for cnvnator to work
+python /home/ggg256/scripts/fasta_to_each_chr.py
+
+cnvnator \
+-root sim${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-unique
+
+cnvnator \
+-root sim${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-his ${bin_size}
+
+cnvnator \
+-root sim${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-stat ${bin_size}
+
+cnvnator \
+-root sim${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-partition ${bin_size}
+
+cnvnator \
+-root sim${PBS_ARRAYID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-call ${bin_size} > sim${PBS_ARRAYID}_cnvnator.txt
+
+python /home/ggg256/scripts/parse_cnvnator.py -f sim${PBS_ARRAYID}_cnvnator.txt -t deletion > sim${PBS_ARRAYID}_cnv.txt
+python /home/ggg256/scripts/parse_cnvnator.py -f sim${PBS_ARRAYID}_cnvnator.txt -t duplication >> sim${PBS_ARRAYID}_cnv.txt
+
+# deleting the individual fasta files to save space
+rm *fa
+
+echo "cnvnator done"
+
+#########################################################################################################
+# aligning data with SpeedSeq, which performs BWA-MEM alignment,
+# marks duplicates and extracts split and discordant read-pairs.
+speedseq align -R "@RG\tID:id\tSM:sim${PBS_ARRAYID}\tLB:lib" \
+$ref \
+$fastq1 \
+$fastq2 \
+
+echo "speedseq done"
+
+/share/apps/lumpy/0.2.13/intel/scripts/lumpyexpress \
+-B ${fastq1}.bam \
+-S ${fastq1}.splitters.bam \
+-D ${fastq1}.discordants.bam \
+-o ${fastq1}_lumpy.vcf
+
+mv ${fastq1}_lumpy.vcf sim${PBS_ARRAYID}_lumpy.vcf
+
+python  /home/ggg256/scripts/parse_lumpy.py -f sim${PBS_ARRAYID}_lumpy.vcf > sim${PBS_ARRAYID}_lumpy.txt
+
+echo "lumpy done"
+
+######################################################################################
+rm sim${PBS_ARRAYID}.sam
+rm sim${PBS_ARRAYID}.bam
+rm ${fastq1}.bam
+rm ${fastq1}.splitters.bam
+rm ${fastq1}.discordants.bam
+rm ${fastq1}.bam.bai
+rm ${fastq1}.splitters.bam.bai
+rm ${fastq1}.discordants.bam.bai
+rm ${fastq1}_lumpy.vcf
+rm ${bam}
+rm ${bam1}
+rm ${fastq1}
+rm ${fastq2}
+rm *fasta
+rm sim${PBS_ARRAYID}_output_*
+rm sim${PBS_ARRAYID}_bd_output
+#rm sim${PBS_ARRAYID}_RD.txt
+rm sim${PBS_ARRAYID}_out.root
+rm sim${PBS_ARRAYID}.sorted.bam
+rm sim${PBS_ARRAYID}.sorted.bam.bai
+rm *bai
+done
+
+exit 0;
+

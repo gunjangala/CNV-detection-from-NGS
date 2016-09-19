@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -V
+#PBS -N sim100_dup
+#PBS -o /scratch/ggg256/Lab/Structural_Variants/simulations/oe
+#PBS -e /scratch/ggg256/Lab/Structural_Variants/simulations/oe
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=25GB
+#PBS -l walltime=48:00:00
+#PBS -M ggg256@nyu.edu
+#PBS -t 1-100
+
+##########################################################################
+module purge
+module load survivor/intel/20160421
+module load wgsim/intel/0.3.1 
+
+###########################################################################
+ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+param_dir=/scratch/ggg256/Lab/Structural_Variants/simulations/param_dir/duplications
+
+#############################################################################
+
+RUNDIR=/scratch/ggg256/Lab/Structural_Variants/simulations/duplications/100x
+cd $RUNDIR
+j=`expr ${PBS_ARRAYID} % 10`
+
+for i in {1..100}
+do
+
+mkdir sim${PBS_ARRAYID}
+
+############ note - parameters.txt file made before executing script.  Ensure that num of reads 
+############ is sufficient for desired coverage.
+
+SURVIVOR 1 ${ref} \
+${param_dir}/parameters_${j} \
+0 \
+sim${PBS_ARRAYID}/sim${PBS_ARRAYID}
+
+wgsim -h -N 12100000 -1 50 -2 50 sim${PBS_ARRAYID}/sim${PBS_ARRAYID}.fasta sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
+
+done
+
+exit 0;
+

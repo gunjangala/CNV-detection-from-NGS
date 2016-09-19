@@ -1,0 +1,361 @@
+---
+author: "Gunjan"
+output: html_document
+---
+
+```{r}
+# Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" -p <pindel output .txt> -c <cnvnator output .txt> -l <lumpy output .txt> -r <read depth .txt file>
+# This will out put a .md file and a directory named "figure" in your working directory
+# To view this .md (which is similar to .html file genearted by Rmarkdown, make sure that the .html and corresponding "figures" folder is in the same directory
+
+# Obtain read depth file for wild type before starting analysis
+
+```
+
+```{r reading files,echo=FALSE}
+library(optparse)
+library(knitr)
+
+#setwd("~/Google Drive/Structural Variants/0_lab_data/ntr_78")
+
+option_list <- list(
+  make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
+  make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
+  make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
+  make_option(c("-r", "--readDepth"),action = "store",default = NULL,help="read depth file"))
+
+opt = parse_args(OptionParser(option_list=option_list))
+
+pindel <-read.table(opt$p, quote="\"", comment.char="",stringsAsFactors = FALSE)
+cnvnator <- read.table(opt$c, quote="\"", comment.char="",stringsAsFactors = FALSE)
+lumpy <- read.table(opt$l, quote="\"", comment.char="",stringsAsFactors = FALSE)
+readDepth <- read.delim(opt$r, header=FALSE,stringsAsFactors = FALSE)
+wt_readDepth <- read.delim("/scratch/ggg256/Lab/Structural_Variants/ntr_data/ntr_1/ntr_1_RD.txt", header=FALSE,stringsAsFactors = FALSE)
+
+### assigning column names
+colnames(pindel)<-c("svtype","chrom.1","start","end","size","supporting.reads")
+colnames(cnvnator)<-c("svtype","chrom.1","start","end","size","normRDsignal")
+colnames(lumpy)<-c("svtype","chrom.1","start","end","size")
+colnames(readDepth) <- c("chromosome", "position", "depth")
+colnames(wt_readDepth) <- c("chromosome", "position", "depth")
+
+print ("Mean Read Depth:")
+mean(readDepth$depth)
+
+# removing chrM
+pindel<-pindel[pindel$chrom.1!="NC_001224.1",]
+cnvnator<-cnvnator[cnvnator$chrom.1!="NC_001224.1",]
+lumpy<-lumpy[lumpy$chrom.1!="NC_001224.1",]
+readDepth <- subset(readDepth, chromosome!="NC_001224.1")
+wt_readDepth <- subset(wt_readDepth, chromosome!="NC_001224.1")
+
+# removing chr12
+pindel<-pindel[pindel$chrom.1!="NC_001144.5",]
+cnvnator<-cnvnator[cnvnator$chrom.1!="NC_001144.5",]
+lumpy<-lumpy[lumpy$chrom.1!="NC_001144.5",]
+readDepth <- subset(readDepth, chromosome!="NC_001144.5")
+wt_readDepth <- subset(wt_readDepth, chromosome!="NC_001144.5")
+
+pindel<-pindel[pindel$svtype!="Provide",]
+cnvnator<-cnvnator[cnvnator$svtype!="Provide",]
+lumpy<-lumpy[lumpy$svtype!="Provide",]
+
+```
+
+
+```{r,echo=FALSE}
+### filtering deletions ###
+pindel_del_filtered <- pindel[pindel$svtype=="D" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv_del_filtered <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>50 & (cnvnator$normRDsignal) < 0.2 ,]
+lumpy_del_filtered <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
+
+### filtering duplications ###
+pindel_dup_filtered <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv_dup_filtered <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal) > 1.8 ,]
+lumpy_dup_filtered <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
+```
+
+
+```{r,echo=FALSE}
+#################################
+########  Making plots ##########
+#################################
+
+# plot_readDepth() function:
+# makes read depth plots for each algorithmic output
+
+plot_readDepth <- function(wt_readDepth,readDepth,filtered_output){
+  
+
+  mean.depth <- mean(readDepth$depth)
+  readDepth$relative <- log2(readDepth$depth/mean.depth)
+  
+  wt.mean.depth <- mean(wt_readDepth$depth)
+  wt_readDepth$relative <- log2(wt_readDepth$depth/wt.mean.depth)
+  
+  filtered_output<-as.data.frame(filtered_output)
+  readDepth<-as.data.frame(readDepth)
+  wt_readDepth <-as.data.frame(wt_readDepth)
+  
+  for (i in 1:nrow(filtered_output)){
+    print (i)
+    paste ("#############################################")
+    
+      if (abs(filtered_output[i,]$size)<=300){
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-50)) &
+                  (readDepth$position<=(filtered_output[i,]$end+50)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+      
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-50)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+50)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      
+      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,31), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,31), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>300 & abs(filtered_output[i,]$size)<=600){
+      
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-100)) &
+                  (readDepth$position<=(filtered_output[i,]$end+100)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+            
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-100)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+100)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,41), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,41), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>600 & abs(filtered_output[i,]$size)<=1000){
+      
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-500)) &
+                  (readDepth$position<=(filtered_output[i,]$end+500)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-500)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+500)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,51), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,51), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>1000 & abs(filtered_output[i,]$size)<=1500){
+      
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-600)) &
+                  (readDepth$position<=(filtered_output[i,]$end+600)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-600)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+600)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,61), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,61), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>1500 & abs(filtered_output[i,]$size)<=3000){
+      
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-1000)) &
+                  (readDepth$position<=(filtered_output[i,]$end+1000)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-1000)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+1000)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,101), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,101), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>3000 & abs(filtered_output[i,]$size)<=6000){
+      
+      rd <- readDepth[((readDepth$chromosome==(filtered_output[i,]$chrom.1)) &
+                  #(readDepth$position>=(filtered_output[i,]$start)) &      
+                  (readDepth$position>=(filtered_output[i,]$start-1500)) &
+                  (readDepth$position<=(filtered_output[i,]$end+1500))),]
+                  #(readDepth$position<=(filtered_output[i,]$end))),]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-1500)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+1500)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,(runmed(rd$relative,201)), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,201), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>6000 & abs(filtered_output[i,]$size)<=10000){
+      
+      rd <- readDepth[((readDepth$chromosome==(filtered_output[i,]$chrom.1)) &
+                  #(readDepth$position>=(filtered_output[i,]$start)) &      
+                  (readDepth$position>=(filtered_output[i,]$start-2000)) &
+                  (readDepth$position<=(filtered_output[i,]$end+2000))),]
+                  #(readDepth$position<=(filtered_output[i,]$end))),]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-2000)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+2000)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,(runmed(rd$relative,301)), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,301), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    } else if (abs(filtered_output[i,]$size)>10000){
+      
+      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-4000)) &
+                  (readDepth$position<=(filtered_output[i,]$end+4000)) ,]
+      rd <- rd[!(rd$relative=="-Inf"),]
+             
+      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-4000)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+4000)) ,]
+      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+      
+      print (filtered_output[i,])
+      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+      lines(rd$position,runmed(rd$relative,501), col="red")
+      par(new=TRUE)
+      lines(wt.rd$position,runmed(wt.rd$relative,501), col="blue")
+      par(new=FALSE)
+      par(mfrow=c(1,1))
+      
+    }
+  }
+}
+
+```
+
+
+
+```{r,echo=FALSE}
+### plotting deletions
+
+# storing deletions in cnv if present in any output and finally writing to cnv.xls
+
+cnv<-NULL
+
+if (is.na(cnv_del_filtered$svtype[1])==FALSE){
+  print ("Deletion:Cnvnator")
+  print (cnv_del_filtered)
+  plot_readDepth(wt_readDepth,readDepth,cnv_del_filtered)
+  cnvnator.deletions <- as.data.frame(cbind("deletion","cnvnator",cnv_del_filtered$chrom.1,cnv_del_filtered$start,cnv_del_filtered$end,cnv_del_filtered$size))
+  cnv<-cnvnator.deletions
+} else {
+  print ("cnvnator deletion 0")
+}
+
+if (is.na(lumpy_del_filtered$svtype[1])==FALSE){
+  print ("Deletion:Lumpy")
+  print (lumpy_del_filtered)
+  plot_readDepth(wt_readDepth,readDepth,lumpy_del_filtered)
+  lumpy.deletions<-as.data.frame(cbind("deletion","lumpy",lumpy_del_filtered$chrom.1,lumpy_del_filtered$start,lumpy_del_filtered$end,lumpy_del_filtered$size))
+  cnv <- rbind(cnv,lumpy.deletions)
+} else {
+  print ("lumpy deletion 0")
+}
+
+if (is.na(pindel_del_filtered$svtype[1])==FALSE){
+  print ("Deletion:Pindel")
+  print (pindel_del_filtered)
+  plot_readDepth(wt_readDepth,readDepth,pindel_del_filtered)
+  pindel.deletions<-as.data.frame(cbind("deletion","pindel",pindel_del_filtered$chrom.1,pindel_del_filtered$start,pindel_del_filtered$end,pindel_del_filtered$size))
+  cnv <- rbind(cnv,pindel.deletions)
+} else {
+  print ("pindel deletion 0")
+}
+
+### plotting duplications
+
+if (is.na(cnv_dup_filtered$svtype[1])==FALSE){
+  print ("Duplication:Cnvnator")
+  print (cnv_dup_filtered)
+  plot_readDepth(wt_readDepth,readDepth,cnv_dup_filtered)
+  cnvnator.duplications <- as.data.frame(cbind("duplication","cnvnator",cnv_dup_filtered$chrom.1,cnv_dup_filtered$start,cnv_dup_filtered$end,cnv_dup_filtered$size))
+  cnv<-rbind(cnv,cnvnator.duplications)
+} else {
+  print ("cnvnator duplication 0")
+}
+
+
+if (is.na(lumpy_dup_filtered$svtype[1])==FALSE){
+  print ("Duplication:Lumpy")
+  print (lumpy_dup_filtered)
+  plot_readDepth(wt_readDepth,readDepth,lumpy_dup_filtered)
+  lumpy.duplications<-as.data.frame(cbind("duplication","lumpy",lumpy_dup_filtered$chrom.1,lumpy_dup_filtered$start,lumpy_dup_filtered$end,lumpy_dup_filtered$size))
+  cnv<-rbind(cnv,lumpy.duplications)
+} else {
+  print ("lumpy duplication 0")
+}
+
+if (is.na(pindel_dup_filtered$svtype[1])==FALSE){
+  print ("Duplication:Pindel")
+  print (pindel_dup_filtered)
+  plot_readDepth(wt_readDepth,readDepth,pindel_dup_filtered)
+  pindel.duplications<-as.data.frame(cbind("duplication","pindel",pindel_dup_filtered$chrom.1,pindel_dup_filtered$start,pindel_dup_filtered$end,pindel_dup_filtered$size))
+  cnv<-rbind(cnv,pindel.duplications)
+} else {
+  print ("pindel duplication 0")
+}
+
+colnames(cnv)<-c("type","algorithm","chrom","start","end","size")
+
+write.csv(cnv,"cnv.xls")
+
+```
+
+```{r filtering del and dup}
+pindel_del_filtered
+cnv_del_filtered
+lumpy_del_filtered
+pindel_dup_filtered
+cnv_dup_filtered
+lumpy_dup_filtered
+```
+
+
