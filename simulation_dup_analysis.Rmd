@@ -1,6 +1,5 @@
 ---
-title: "FDR and sensitivity"
-author: "Gunjan"
+author: "Gunjan Gala"
 output: html_document
 ---
 ```{r}
