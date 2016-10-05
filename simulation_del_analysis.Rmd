@@ -162,10 +162,10 @@ write.csv(final, file = paste0(opt$d,".xls"))
 
 ```
 
-```{r Voting}
+```{r Voting,warning=FALSE,message=FALSE}
 pindel.GR <- gRange.object(pindel.del)
 cnv.GR <- gRange.object(cnv.del)
-lumpy.GR <- gRange.object(lumpy.del)
+lumpy.GR <- gRange.object(lumpy.delh)
 sim.GR <- gRange.object(sim.del)
 
 length(pindel.GR)
@@ -173,13 +173,41 @@ length(cnv.GR)
 length(lumpy.GR)
 length(sim.GR)
 
-votes <- as.data.frame(cbind(sim.del$chrom.1,sim.del$start,sim.del$end,
-                             as.numeric(sim.del$end)-as.numeric(sim.del$start),
-                             sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
-                             sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
-                             sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})))
+pindel.vote <- sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+cnv.vote <- sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+lumpy.vote <- sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 
-colnames(votes) <- c("chrom","start","end","size","pindel","cnvnator","lumpy")
+votes <- as.data.frame(cbind(sim.del$chrom.1,sim.del$start,sim.del$end,
+                              as.numeric(sim.del$end)-as.numeric(sim.del$start)))
+colnames(votes) <- c("chrom","start","end","size")
+
+votes$pindel <- 0
+votes$cnvnator <- 0
+votes$lumpy <- 0
+
+if (length(pindel.vote)>1){
+  votes$pindel <- pindel.vote
+} else {
+  votes$pindel <- 0
+}
+           
+head(votes)
+                
+if (length(cnv.vote)>1){
+  votes$cnvnator <- cnv.vote
+} else {
+  votes$cnvnator <- 0
+}
+
+head(votes)
+
+if (length(lumpy.vote)>1){
+  votes$lumpy <- lumpy.vote
+} else {
+  votes$lumpy  <- 0
+}
+
+head(votes)
 
 votes$pindel <- as.numeric(votes$pindel)
 votes$lumpy <- as.numeric(votes$lumpy)
@@ -193,10 +221,13 @@ votes$pindel[votes$pindel==2] <- 1
 votes$cnvnator[votes$cnvnator==2] <- 1
 votes$lumpy[votes$lumpy==2] <- 1
 
+
+
 votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
 
 votes <- votes[(order(votes$call,decreasing=TRUE)),]
-votes
+
+head(votes)
 
 write.csv(votes, file = paste0(opt$d,"_vote",".xls"))
 ```
