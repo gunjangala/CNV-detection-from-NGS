@@ -1,5 +1,4 @@
 ---
-title: "FDR and sensitivity"
 author: "Gunjan"
 output: html_document
 ---
@@ -44,10 +43,6 @@ simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors 
 simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
 simBed <- simBed[simBed$chrom!="chr17",]
 
-#breakdancer <- read.csv(opt$b, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
-#breakdancer <- (separate(data =breakdancer, col =V1, into = c("sim", "V1"), sep = "_bd.txt:"))
-#breakdancer <- breakdancer[breakdancer$V2!="chr17",]
-
 pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
 colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
@@ -86,15 +81,6 @@ pindel$end <- as.integer(pindel$end)
 pindel$size <- as.integer(pindel$size)
 pindel$supporting.reads <- as.integer(pindel$supporting.reads)
 
-#breakdancer$sim <- as.character(breakdancer$sim)
-#breakdancer$svtype <- as.character(breakdancer$svtype)
-#breakdancer$chrom.1 <- as.character(breakdancer$chrom.1)
-#breakdancer$chrom.2 <- as.character(breakdancer$chrom.2)
-#breakdancer$start <- as.integer(breakdancer$start)
-#breakdancer$end <- as.integer(breakdancer$end)
-#breakdancer$size <- as.integer(breakdancer$size)
-#breakdancer$supporting.reads <- as.integer(breakdancer$supporting.reads)
-
 cnvnator$sim <- as.character(cnvnator$sim)
 cnvnator$svtype <- as.character(cnvnator$svtype)
 cnvnator$chrom.1 <- as.character(cnvnator$chrom.1)
@@ -118,10 +104,6 @@ lumpy.del <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
 #breakdancer.del <- breakdancer[breakdancer$svtype=="DEL" & breakdancer$size>50 & breakdancer$supporting.reads>10 ,]
 sim.del <- simBed[simBed$svtype=="DEL",]
 
-#pindel.dup <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
-#cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal)>1.8 ,]
-#lumpy.dup <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
-#sim.dup <- simBed[simBed$svtype=="DUP",]
 ```
 
 
@@ -136,35 +118,43 @@ gRange.object <- function (object){
   return (gR)
 }
 
-scores <- function (query,subject) {
+scores <- function (query,subject,algorithm,coverage) {
   sim <- gRange.object(subject)
   test <- gRange.object(query)
   res <- countOverlaps(test,sim,type="any")
-  FDR <- round(((length(res[res==0]))/(length(res))),2)
-  sensitivity <-  round((length(res[res==1])) / ((length(sim))),2)
-  analysis <-t(as.data.frame(as.matrix(c(FDR,sensitivity))))
-  colnames(analysis) <- c("FDR","sensitivity")
-  rownames(analysis) <- paste0(opt$d,deparse(substitute(query)))
+  TP <- length(res[!res==0])
+  FP <- length(res[res==0])
+  present <- dim(subject)[1]
+  detected <- dim(query)[1]
+  FDR <- round(((length(res[res==0]))/(length(res))),2) 
+  precision <- round(((TP)/(TP+FP)),2)
+  
+  res1 <- countOverlaps(sim,test,type="any")
+  FN <- (length(res1[res1==0]))
+  sensitivity = round(((TP)/(TP+FN)),2)
+  
+  analysis <-t(as.data.frame(as.matrix(c("del",coverage,algorithm,present,detected,TP,FP,FN,FDR,precision,sensitivity))))
+  colnames(analysis) <- c("type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity")
   return (analysis)
 }
 
 
-cnv.del.analysis<-scores(cnv.del,sim.del)
-#breakdancer.del.analysis<-scores(breakdancer.del,sim.del)
-lumpy.del.analysis<-scores(lumpy.del,sim.del)
-pindel.del.analysis<-scores(pindel.del,sim.del)
+cnv.del.analysis<-scores(cnv.del,sim.del,"cnvnator",opt$d)
+lumpy.del.analysis<-scores(lumpy.del,sim.del,"lumpy",opt$d)
+pindel.del.analysis<-scores(pindel.del,sim.del,"pindel",opt$d)
 
-# breakdancer.dup.analysis<-scores(breakdancer.dup,sim.dup)
-#cnv.dup.analysis<-scores(cnv.dup,sim.dup)
-#lumpy.dup.analysis<-scores(lumpy.dup,sim.dup)
-#pindel.dup.analysis<-scores(pindel.dup,sim.dup)
+if (dim(cnv.del.analysis)[2]!=0){
+  final <- rbind(cnv.del.analysis)
+}
 
-final <- (rbind(cnv.del.analysis,
-          lumpy.del.analysis,
-          pindel.del.analysis))
-          #cnv.dup.analysis,
-          #lumpy.dup.analysis,
-          #pindel.dup.analysis))
+if (dim(pindel.del.analysis)[2]!=0){
+  final <- rbind(final,pindel.del.analysis)
+}
+
+if (dim(lumpy.del.analysis)[2]!=0){
+  final <- rbind(final,lumpy.del.analysis)
+}   
+
 final
 
 
@@ -172,5 +162,43 @@ write.csv(final, file = paste0(opt$d,".xls"))
 
 ```
 
+```{r Voting}
+pindel.GR <- gRange.object(pindel.del)
+cnv.GR <- gRange.object(cnv.del)
+lumpy.GR <- gRange.object(lumpy.del)
+sim.GR <- gRange.object(sim.del)
+
+length(pindel.GR)
+length(cnv.GR)
+length(lumpy.GR)
+length(sim.GR)
+
+votes <- as.data.frame(cbind(sim.del$chrom.1,sim.del$start,sim.del$end,
+                             as.numeric(sim.del$end)-as.numeric(sim.del$start),
+                             sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
+                             sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
+                             sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})))
+
+colnames(votes) <- c("chrom","start","end","size","pindel","cnvnator","lumpy")
+
+votes$pindel <- as.numeric(votes$pindel)
+votes$lumpy <- as.numeric(votes$lumpy)
+votes$cnvnator <- as.numeric(votes$cnvnator)
+
+votes$pindel[votes$pindel==1] <- 0
+votes$cnvnator[votes$cnvnator==1] <- 0
+votes$lumpy[votes$lumpy==1] <- 0
+
+votes$pindel[votes$pindel==2] <- 1
+votes$cnvnator[votes$cnvnator==2] <- 1
+votes$lumpy[votes$lumpy==2] <- 1
+
+votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
+
+votes <- votes[(order(votes$call,decreasing=TRUE)),]
+votes
+
+write.csv(votes, file = paste0(opt$d,"_vote",".xls"))
+```
 
 
