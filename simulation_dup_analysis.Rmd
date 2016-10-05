@@ -1,4 +1,5 @@
 ---
+title: "FDR Sensitivity Precision and Voting"
 author: "Gunjan Gala"
 output: html_document
 ---
@@ -173,18 +174,18 @@ write.csv(final, file = paste0(opt$d,".xls"))
 
 
 ```{r Voting}
-pindel.GR <- gRange.object(pindel.del)
-cnv.GR <- gRange.object(cnv.del)
-lumpy.GR <- gRange.object(lumpy.del)
-sim.GR <- gRange.object(sim.del)
+pindel.GR <- gRange.object(pindel.dup)
+cnv.GR <- gRange.object(cnv.dup)
+lumpy.GR <- gRange.object(lumpy.dup)
+sim.GR <- gRange.object(sim.dup)
 
 length(pindel.GR)
 length(cnv.GR)
 length(lumpy.GR)
 length(sim.GR)
 
-votes <- as.data.frame(cbind(sim.del$chrom.1,sim.del$start,sim.del$end,
-                             as.numeric(sim.del$end)-as.numeric(sim.del$start),
+votes <- as.data.frame(cbind(sim.dup$chrom.1,sim.dup$start,sim.dup$end,
+                             as.numeric(sim.dup$end)-as.numeric(sim.dup$start),
                              sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
                              sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}}),
                              sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})))
