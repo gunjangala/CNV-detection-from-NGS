@@ -49,13 +49,6 @@ lumpy<-lumpy[lumpy$chrom.1!="NC_001224.1",]
 readDepth <- subset(readDepth, chromosome!="NC_001224.1")
 wt_readDepth <- subset(wt_readDepth, chromosome!="NC_001224.1")
 
-# removing chr12
-pindel<-pindel[pindel$chrom.1!="NC_001144.5",]
-cnvnator<-cnvnator[cnvnator$chrom.1!="NC_001144.5",]
-lumpy<-lumpy[lumpy$chrom.1!="NC_001144.5",]
-readDepth <- subset(readDepth, chromosome!="NC_001144.5")
-wt_readDepth <- subset(wt_readDepth, chromosome!="NC_001144.5")
-
 pindel<-pindel[pindel$svtype!="Provide",]
 cnvnator<-cnvnator[cnvnator$svtype!="Provide",]
 lumpy<-lumpy[lumpy$svtype!="Provide",]
@@ -101,171 +94,29 @@ plot_readDepth <- function(wt_readDepth,readDepth,filtered_output){
     print (i)
     paste ("#############################################")
     
-      if (abs(filtered_output[i,]$size)<=300){
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-50)) &
-                  (readDepth$position<=(filtered_output[i,]$end+50)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
+    size <- filtered_output[i,]$size
+    surrounding.area <- size*2
+    
+    if ((size/8)%%2==0){breaks <- (size/8)+1} else {breaks <- as.integer(size/8)}
+ 
+    rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (readDepth$position>=(filtered_output[i,]$start-surrounding.area)) &
+                  (readDepth$position<=(filtered_output[i,]$end+surrounding.area)) ,]
+    rd <- rd[!(rd$relative=="-Inf"),]
       
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-50)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+50)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+    wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
+                  (wt_readDepth$position>=(filtered_output[i,]$start-surrounding.area)) &
+                  (wt_readDepth$position<=(filtered_output[i,]$end+surrounding.area)) ,]
+    wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
+     
+    print (filtered_output[i,])
       
-      print (filtered_output[i,])
-      
-      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,31), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,31), col="blue")
+    plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+    lines(rd$position,runmed(rd$relative,breaks), col="red")
+    par(new=TRUE)
+    lines(wt.rd$position,runmed(wt.rd$relative,breaks), col="blue")
       par(new=FALSE)
       par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>300 & abs(filtered_output[i,]$size)<=600){
-      
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-100)) &
-                  (readDepth$position<=(filtered_output[i,]$end+100)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
-            
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-100)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+100)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,41), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,41), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>600 & abs(filtered_output[i,]$size)<=1000){
-      
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-500)) &
-                  (readDepth$position<=(filtered_output[i,]$end+500)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-500)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+500)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,51), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,51), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>1000 & abs(filtered_output[i,]$size)<=1500){
-      
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-600)) &
-                  (readDepth$position<=(filtered_output[i,]$end+600)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-600)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+600)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,61), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,61), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>1500 & abs(filtered_output[i,]$size)<=3000){
-      
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-1000)) &
-                  (readDepth$position<=(filtered_output[i,]$end+1000)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-1000)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+1000)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,101), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,101), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>3000 & abs(filtered_output[i,]$size)<=6000){
-      
-      rd <- readDepth[((readDepth$chromosome==(filtered_output[i,]$chrom.1)) &
-                  #(readDepth$position>=(filtered_output[i,]$start)) &      
-                  (readDepth$position>=(filtered_output[i,]$start-1500)) &
-                  (readDepth$position<=(filtered_output[i,]$end+1500))),]
-                  #(readDepth$position<=(filtered_output[i,]$end))),]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-1500)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+1500)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,(runmed(rd$relative,201)), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,201), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>6000 & abs(filtered_output[i,]$size)<=10000){
-      
-      rd <- readDepth[((readDepth$chromosome==(filtered_output[i,]$chrom.1)) &
-                  #(readDepth$position>=(filtered_output[i,]$start)) &      
-                  (readDepth$position>=(filtered_output[i,]$start-2000)) &
-                  (readDepth$position<=(filtered_output[i,]$end+2000))),]
-                  #(readDepth$position<=(filtered_output[i,]$end))),]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-2000)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+2000)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,(runmed(rd$relative,301)), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,301), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    } else if (abs(filtered_output[i,]$size)>10000){
-      
-      rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (readDepth$position>=(filtered_output[i,]$start-4000)) &
-                  (readDepth$position<=(filtered_output[i,]$end+4000)) ,]
-      rd <- rd[!(rd$relative=="-Inf"),]
-             
-      wt.rd <- wt_readDepth[(wt_readDepth$chromosome==filtered_output[i,]$chrom.1) &
-                  (wt_readDepth$position>=(filtered_output[i,]$start-4000)) &
-                  (wt_readDepth$position<=(filtered_output[i,]$end+4000)) ,]
-      wt.rd <- wt.rd[!(wt.rd$relative=="-Inf"),]
-      
-      print (filtered_output[i,])
-      plot(rd$position, rd$relative, pch=".", main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
-      lines(rd$position,runmed(rd$relative,501), col="red")
-      par(new=TRUE)
-      lines(wt.rd$position,runmed(wt.rd$relative,501), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
-      
-    }
   }
 }
 

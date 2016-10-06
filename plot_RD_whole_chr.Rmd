@@ -1,0 +1,134 @@
+---
+title: "ReadDepth"
+author: "David and Gunjan"
+output: html_document
+---
+#Rscript -e "library(knitr); knit('<name of Rmd file>')" -r <sample read depth file> -s <sample name>
+
+
+```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("GenomicRanges")
+#require(GenomicRanges)
+
+#install.packages("tidyr",repos = "http://cran.us.r-project.org")
+#install.packages("dplyr",repos = "http://cran.us.r-project.org")
+#library(tidyr)
+#library(dplyr)
+library(optparse)
+library(knitr)
+```
+
+```{r reading in the files,echo=FALSE}
+
+option_list <- list(
+  make_option(c("-s", "--sample"),action = "store",default = NULL,help="sample name"),
+  make_option(c("-r", "--readDepthSample"),action = "store",default = NULL,help="read depth sample file"))
+
+opt = parse_args(OptionParser(option_list=option_list))
+
+```
+
+
+```{r, echo=FALSE}
+readDepth <- read.delim(opt$r, header=FALSE)
+names(readDepth) <- c("chromosome", "position", "depth")
+
+wt_readDepth <- read.delim("/scratch/ggg256/Lab/Structural_Variants/ntr_data/ntr_1/ntr_1_RD.txt", header=FALSE,stringsAsFactors = FALSE)
+names(wt_readDepth) <- c("chromosome", "position", "depth")
+
+readDepth$chromosome <- as.character(readDepth$chromosome)
+readDepth$chromosome[readDepth$chromosome=="NC_001133.9"] <- "chr01"
+readDepth$chromosome[readDepth$chromosome=="NC_001134.8"] <- "chr02"
+readDepth$chromosome[readDepth$chromosome=="NC_001135.5"] <- "chr03"
+readDepth$chromosome[readDepth$chromosome=="NC_001136.10"] <- "chr04"
+readDepth$chromosome[readDepth$chromosome=="NC_001137.3"] <- "chr05"
+readDepth$chromosome[readDepth$chromosome=="NC_001138.5"] <- "chr06"
+readDepth$chromosome[readDepth$chromosome=="NC_001139.9"] <- "chr07"
+readDepth$chromosome[readDepth$chromosome=="NC_001140.6"] <- "chr08"
+readDepth$chromosome[readDepth$chromosome=="NC_001141.2"] <- "chr09"
+readDepth$chromosome[readDepth$chromosome=="NC_001142.9"] <- "chr10"
+readDepth$chromosome[readDepth$chromosome=="NC_001143.9"] <- "chr11"
+readDepth$chromosome[readDepth$chromosome=="NC_001144.5"] <- "chr12"
+readDepth$chromosome[readDepth$chromosome=="NC_001145.3"] <- "chr13"
+readDepth$chromosome[readDepth$chromosome=="NC_001146.8"] <- "chr14"
+readDepth$chromosome[readDepth$chromosome=="NC_001147.6"] <- "chr15"
+readDepth$chromosome[readDepth$chromosome=="NC_001148.4"] <- "chr16"
+readDepth$chromosome[readDepth$chromosome=="NC_001224.1"] <- "chrM"
+
+wt_readDepth$chromosome <- as.character(wt_readDepth$chromosome)
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001133.9"] <- "chr01"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001134.8"] <- "chr02"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001135.5"] <- "chr03"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001136.10"] <- "chr04"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001137.3"] <- "chr05"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001138.5"] <- "chr06"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001139.9"] <- "chr07"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001140.6"] <- "chr08"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001141.2"] <- "chr09"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001142.9"] <- "chr10"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001143.9"] <- "chr11"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001144.5"] <- "chr12"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001145.3"] <- "chr13"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001146.8"] <- "chr14"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001147.6"] <- "chr15"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001148.4"] <- "chr16"
+wt_readDepth$chromosome[wt_readDepth$chromosome=="NC_001224.1"] <- "chrM"
+
+#remove mitochondrial genome
+readDepth <- subset(readDepth, chromosome!="chrM")
+wt_readDepth <- subset(wt_readDepth, chromosome!="chrM")
+```
+
+###Basic Diaagnostic plots
+```{r}
+summary(readDepth)
+hist(log10(readDepth$depth), br=100)
+mean.depth <- mean(readDepth$depth)
+sd.depth <- sd(readDepth$depth)
+abline(v = log10(mean(readDepth$depth)), lty=2, col="red", lwd=3)
+legend("topleft", legend = paste("mean depth = ", round(mean.depth, 4), sep=""))
+
+
+readDepth$zscore <- (readDepth$depth-mean.depth)/sd.depth
+hist(readDepth$zscore, xlim=c(-3,3), br=1000)
+
+mean.depth <- mean(readDepth$depth)
+readDepth$relative <- log2(readDepth$depth/mean.depth)
+readDepth <- readDepth[!(readDepth$relative=="-Inf"),]
+
+wt.mean.depth <- mean(wt_readDepth$depth)
+wt_readDepth$relative <- log2(wt_readDepth$depth/wt.mean.depth)
+wt_readDepth <- wt_readDepth[!(wt_readDepth$relative=="-Inf"),]
+
+```
+
+###Plot read depth for each chromosome
+
+```{r}
+for(i in 1:16){
+ 
+  if(i<10){chr <- paste("chr0",i, sep="")} else {chr <- paste("chr",i, sep="")}
+
+  #read depth normalized by mean read depth for the chromosome
+  #read depth normalized by mean read depth for the chromosome
+  plot(readDepth$position[readDepth$chromosome==chr],
+       readDepth$relative[readDepth$chromosome==chr],
+       pch=".", main=chr, xlab="position", ylab="log2(read depth / mean chromosome read depth)", ylim=c(-2,4))
+  lines(readDepth$position[readDepth$chromosome==chr],
+        runmed(readDepth$relative[readDepth$chromosome==chr],
+               10001), col="red")
+  
+  par(new=TRUE)
+  lines(wt_readDepth$position[wt_readDepth$chromosome==chr],
+        runmed(wt_readDepth$relative[wt_readDepth$chromosome==chr],
+               10001), col="blue")
+  legend("topright", legend = paste("mean depth = ", round(mean.depth, 2),", blue:WT,red:",opt$s , sep=""))
+  par(new=FALSE)
+  par(mfrow=c(1,1))
+
+}
+```
+
+
+
