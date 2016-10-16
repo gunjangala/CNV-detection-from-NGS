@@ -26,11 +26,11 @@ require(GenomicRanges)
 #install.packages("dplyr",repos = "http://cran.us.r-project.org")
 library(tidyr)
 library(dplyr)
-#library(optparse)
+library(optparse)
 library(knitr)
 ```
 
-```{r reading in the files,echo=FALSE,eval=FALSE}
+```{r reading in the files,echo=FALSE}
 
 option_list <- list(
   make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
@@ -72,7 +72,7 @@ type=opt$t
 
 
 
-```{r,echo=FALSE,message=FALSE}
+```{r,echo=FALSE,message=FALSE,eval=FALSE}
 setwd("~/Google Drive/simulations/simulation files to work with for Rcode")
 
 depth="100X"
