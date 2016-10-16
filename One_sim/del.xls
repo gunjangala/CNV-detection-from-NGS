@@ -1,0 +1,4 @@
+"","type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity"
+"V1","del","del","cnvnator","8","8","8","0","0","0","1","1"
+"V1","del","del","pindel","8","10","7","3","1","0.3","0.7","0.88"
+"V1","del","del","lumpy","8","7","7","0","1","0","1","0.88"

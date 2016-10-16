@@ -1,0 +1,177 @@
+---
+title: "voting test"
+author: "Gunjan Gala"
+date: "10/5/2016"
+output: html_document
+---
+
+```{r}
+# transfer all .bed files in same directory and then do : grep "" .bed > simBed.txt
+# Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" -p <pindel output .txt> -c <cnvnator output .txt> -l <lumpy output .txt> -s <sample name>
+```
+
+```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("GenomicRanges")
+require(GenomicRanges)
+
+#install.packages("tidyr",repos = "http://cran.us.r-project.org")
+#install.packages("dplyr",repos = "http://cran.us.r-project.org")
+library(tidyr)
+library(dplyr)
+library(optparse)
+library(knitr)
+```
+
+```{r reading in the files,echo=FALSE}
+
+option_list <- list(
+  make_option(c("-s", "--sample"),action = "store",default = NULL,help="sample name"),
+  make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
+  make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
+  make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"))
+
+opt = parse_args(OptionParser(option_list=option_list))
+
+```
+
+
+```{r reading files,echo=FALSE}
+#setwd("~/Google Drive/Structural Variants/0_lab_data/ntr_80")
+
+# reading files
+pindel <-read.table(opt$p, quote="\"", comment.char="",stringsAsFactors = FALSE)
+cnvnator <- read.table(opt$c, quote="\"", comment.char="",stringsAsFactors = FALSE)
+lumpy <- read.table(opt$l, quote="\"", comment.char="",stringsAsFactors = FALSE)
+
+### assigning column names
+colnames(pindel)<-c("svtype","chrom.1","start","end","size","supporting.reads")
+colnames(cnvnator)<-c("svtype","chrom.1","start","end","size","normRDsignal")
+colnames(lumpy)<-c("svtype","chrom.1","start","end","size")
+
+# removing chrM
+pindel<-pindel[pindel$chrom.1!="NC_001224.1",]
+cnvnator<-cnvnator[cnvnator$chrom.1!="NC_001224.1",]
+lumpy<-lumpy[lumpy$chrom.1!="NC_001224.1",]
+
+pindel<-pindel[pindel$svtype!="Provide",]
+cnvnator<-cnvnator[cnvnator$svtype!="Provide",]
+lumpy<-lumpy[lumpy$svtype!="Provide",]
+
+```
+
+```{r structure of assigned variables}
+str(pindel)
+pindel$start <- as.numeric(pindel$start)
+pindel$end <- as.numeric(pindel$end)
+pindel$size <- as.numeric(pindel$size)
+pindel$supporting.reads <- as.numeric(pindel$supporting.reads)
+str(pindel)
+
+str(cnvnator)
+cnvnator$start <- as.integer(cnvnator$start)
+cnvnator$end <- as.integer(cnvnator$end)
+cnvnator$size <- as.integer(cnvnator$size)
+str(cnvnator)
+
+str(lumpy)
+lumpy$start <- as.integer(lumpy$start)
+lumpy$end <- as.integer(lumpy$end)
+lumpy$size <- as.integer(lumpy$size)
+str(lumpy)
+
+```
+
+```{r printing algorithmic output}
+pindel
+cnvnator
+lumpy
+```
+
+```{r}
+### filtering deletions ###
+pindel.del <- pindel[pindel$svtype=="D" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv.del <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>50 & (cnvnator$normRDsignal) < 0.2 ,]
+lumpy.del <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
+
+### filtering duplications ###
+pindel.dup <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal) > 1.8 ,]
+lumpy.dup <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
+
+merged.del <- as.data.frame(rbind(cbind(pindel.del$chrom.1,pindel.del$start,pindel.del$end),
+                                   cbind(cnv.del$chrom.1,cnv.del$start,cnv.del$end),
+                                   cbind(lumpy.del$chrom.1,lumpy.del$start,lumpy.del$end)))
+colnames(merged.del) <- c("chrom.1","start","end")
+merged.del$start <- as.integer(as.character(merged.del$start))
+merged.del$end <- as.integer(as.character(merged.del$end))
+
+
+merged.dup <- as.data.frame(rbind(cbind(pindel.dup$chrom.1,pindel.dup$start,pindel.dup$end),
+                                   cbind(cnv.dup$chrom.1,cnv.dup$start,cnv.dup$end),
+                                   cbind(lumpy.dup$chrom.1,lumpy.dup$start,lumpy.dup$end)))
+colnames(merged.dup) <- c("chrom.1","start","end")
+merged.dup$start <- as.integer(as.character(merged.dup$start))
+merged.dup$end <- as.integer(as.character(merged.dup$end))
+
+
+```
+
+```{r}
+gRange.object <- function (object){
+  chr <- object$chrom.1 
+  start <- (object$start)
+  end <- (object$end)
+  gR <- GRanges(seqnames = chr, ranges = IRanges(start=start, end=end))
+  return (gR)
+}
+```
+
+```{r deletion}
+pindel.del.GR <- gRange.object(pindel.del)
+cnv.del.GR <- gRange.object(cnv.del)
+lumpy.del.GR <- gRange.object(lumpy.del)
+merged.del.GR <- gRange.object(merged.del)
+
+c.del <- countOverlaps(merged.del.GR,cnv.del.GR)
+p.del <- countOverlaps(merged.del.GR,pindel.del.GR)
+l.del <- countOverlaps(merged.del.GR,lumpy.del.GR)
+
+
+del <- as.data.frame(cbind("del",merged.del$chrom.1,merged.del$start,merged.del$end,merged.del$end-merged.del$start))
+colnames(del) <- c("type","chrom","start","end","size")
+del$pindel <-(p.del)
+del$cnv <-(c.del)
+del$lumpy <-(l.del)
+
+```
+
+```{r duplication}
+
+pindel.dup.GR <- gRange.object(pindel.dup)
+cnv.dup.GR <- gRange.object(cnv.dup)
+lumpy.dup.GR <- gRange.object(lumpy.dup)
+merged.dup.GR <- gRange.object(merged.dup)
+
+c.dup <- countOverlaps(merged.dup.GR,cnv.dup.GR)
+p.dup <- countOverlaps(merged.dup.GR,pindel.dup.GR)
+l.dup <- countOverlaps(merged.dup.GR,lumpy.dup.GR)
+
+dup <- as.data.frame(cbind("dup",merged.dup$chrom.1,merged.dup$start,merged.dup$end,merged.dup$end-merged.dup$start))
+colnames(dup) <- c("type","chrom","start","end","size")
+dup$pindel <- (p.dup)
+dup$cnv <- (c.dup)
+dup$lumpy <- (l.dup)
+
+```
+
+
+```{r}
+
+final <- rbind(del,dup)
+final$votes <- (final$pindel + final$cnv + final$lumpy)
+final
+
+write.csv(final,paste0(opt$s,"_votes",".xls"))
+
+```
