@@ -1,18 +1,19 @@
 ---
-title: "FDR Sensitivity Precision and Voting"
-author: "Gunjan Gala"
+author: "Gunjan"
 output: html_document
 ---
-```{r}
-# transfer all .bed files in same directory and then do : grep "" .bed > simBed.txt
+```{r,echo=FALSE,eval=FALSE}
+# transfer all .bed files in same directory and then do : grep "" .bed > simBed.txt. Do similarly for all the files
 
 # use the following on command line
 # Rscript *.md \
 # -d coverage \
+# -t variant type
 # -s simBedfile \
 # -p pindel \
 # -c cnvnator \
 # -l lumpy \
+# -b breakdancer
 ```
 
 
@@ -25,14 +26,16 @@ require(GenomicRanges)
 #install.packages("dplyr",repos = "http://cran.us.r-project.org")
 library(tidyr)
 library(dplyr)
-library(optparse)
+#library(optparse)
 library(knitr)
 ```
 
-```{r reading in the files,echo=FALSE}
+```{r reading in the files,echo=FALSE,eval=FALSE}
 
 option_list <- list(
-  make_option(c("-d", "--depth"),action = "store",default = NULL,help="coverage of simulation"),
+  make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
+  make_option(c("-t", "--type"),action = "store",default = NULL,help="variant type"),
+  make_option(c("-b", "--breakdancer"),action = "store",default = NULL,help="breakdancer file"),
   make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
   make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
   make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
@@ -42,25 +45,65 @@ opt = parse_args(OptionParser(option_list=option_list))
 
 simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
-simBed <- simBed[simBed$chrom!="chr17",]
+#simBed <- simBed[simBed$chrom!="chr17",]
 
 pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
 colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
 p_provide <- pind[(pind$V2=="Provide"),]
 pindel <- (pind %>% anti_join(p_provide))
-pindel <- pindel[pindel$V3!="chr17",]
+#pindel <- pindel[pindel$V3!="chr17",]
 
 cnvnator <- read.csv(opt$c, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
-cnvnator <- cnvnator[cnvnator$V2!="chr17",]
+#cnvnator <- cnvnator[cnvnator$V2!="chr17",]
 
 lumpy <- read.csv(opt$l, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
-lumpy<- lumpy[lumpy$V2!="chr17",]
+#lumpy<- lumpy[lumpy$V2!="chr17",]
+
+breakdancer <- read.csv("100_breakdancer.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+breakdancer <-(separate(data = breakdancer , col =V1, into = c("sim", "chrom"), sep = "_bd.txt:"))
+#breakdancer<- breakdancer[breakdancer$V2!="chr17",]
+
+depth=opt$d
+type=opt$t
 ```
 
-```{r data structures,echo=FALSE}
+
+
+```{r,echo=FALSE,message=FALSE}
+setwd("~/Google Drive/simulations/simulation files to work with for Rcode")
+
+depth="100X"
+type="dup"
+
+simBed <- read.csv("100_bed.txt",sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
+#simBed <- simBed[simBed$chrom!="chr17",]
+
+pind <- read.csv("100_pindel.txt",sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
+colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
+p_provide <- pind[(pind$V2=="Provide"),]
+pindel <- (pind %>% anti_join(p_provide))
+#pindel <- pindel[pindel$V3!="chr17",]
+
+cnvnator <- read.csv("100_cnv.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
+#cnvnator <- cnvnator[cnvnator$V2!="chr17",]
+
+lumpy <- read.csv("100_lumpy.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
+#lumpy<- lumpy[lumpy$V2!="chr17",]
+
+breakdancer <- read.csv("100_breakdancer.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+breakdancer <-(separate(data = breakdancer , col =V1, into = c("sim", "chrom"), sep = "_bd.txt:"))
+#breakdancer<- breakdancer[breakdancer$V2!="chr17",]
+```
+
+
+```{r data structures,echo=FALSE,message=FALSE}
 colnames(pindel)<-c("sim","svtype","chrom.1","start","end","size","supporting.reads")
 colnames(cnvnator)<-c("sim","svtype","chrom.1","start","end","size","normRDsignal")
 colnames(lumpy)<-c("sim","svtype","chrom.1","start","end","size")
@@ -72,50 +115,54 @@ simBed$chrom.2 <- as.character(simBed$chrom.2)
 simBed$svtype <- as.character(simBed$svtype)
 simBed$start <- as.integer(simBed$start)
 simBed$end <- as.integer(simBed$end)
-simBed <- simBed[simBed$chrom.1==simBed$chrom.2 & simBed$end > simBed$start ,]
 
 pindel$sim <- as.character(pindel$sim)
 pindel$svtype <- as.character(pindel$svtype)
 pindel$chrom.1 <- as.character(pindel$chrom.1)
-pindel$start <- abs(as.integer(pindel$start))
-pindel$end <- abs(as.integer(pindel$end))
-pindel$size <- abs(as.integer(pindel$size))
+pindel$start <- as.integer(pindel$start)
+pindel$end <- as.integer(pindel$end)
+pindel$size <- as.integer(pindel$size)
 pindel$supporting.reads <- as.integer(pindel$supporting.reads)
-pindel <- pindel[pindel$end > pindel$start ,]
 
 cnvnator$sim <- as.character(cnvnator$sim)
 cnvnator$svtype <- as.character(cnvnator$svtype)
 cnvnator$chrom.1 <- as.character(cnvnator$chrom.1)
-cnvnator$start <- abs(as.integer(cnvnator$start))
-cnvnator$end <- abs(as.integer(cnvnator$end))
-cnvnator$size <- abs(as.integer(cnvnator$size))
-cnvnator$normRDsignal <- abs(as.numeric(cnvnator$normRDsignal))
-cnvnator <- cnvnator[cnvnator$end > cnvnator$start ,]
+cnvnator$start <- as.integer(cnvnator$start)
+cnvnator$end <- as.integer(cnvnator$end)
+cnvnator$size <- as.integer(cnvnator$size)
+cnvnator$normRDsignal <- as.numeric(cnvnator$normRDsignal)
 
 lumpy$sim <- as.character(lumpy$sim)
 lumpy$svtype <- as.character(lumpy$svtype)
 lumpy$chrom.1 <- as.character(lumpy$chrom.1)
-lumpy$start <- abs(as.integer(lumpy$start))
-lumpy$end <- abs(as.integer(lumpy$end))
-lumpy$size <- abs(as.integer(lumpy$size))
-lumpy <- lumpy[lumpy$end > lumpy$start ,]
+lumpy$start <- as.integer(lumpy$start)
+lumpy$end <- as.integer(lumpy$end)
+lumpy$size <- as.integer(abs(lumpy$size))
 ```
 
-```{r filtering,echo=FALSE}
+```{r,eval=FALSE}
+colnames(breakdancer)<-c("sim","svtype","chrom.1","start","chrom.2","end","size","supporting.reads")
+breakdancer$sim <- as.character(breakdancer$sim)
+breakdancer$svtype <- as.character(breakdancer$svtype)
+breakdancer$chrom.1 <- as.character(breakdancer$chrom.1)
+breakdancer$start <- as.integer(breakdancer$start)
+breakdancer$chrom.2 <- as.character(breakdancer$chrom.2)
+breakdancer$end <- as.integer(breakdancer$end)
+breakdancer$size <- as.integer(breakdancer$size)
+breakdancer$supporting.reads <- as.integer(breakdancer$supporting.reads)
+breakdancer.dup <- breakdancer[breakdancer$svtype=="DEL" & breakdancer$size>50 & breakdancer$supporting.reads>10 ,]
+```
 
-pindel.dup <- pindel[pindel$svtype=="TD" & abs(pindel$size)>50 & abs(pindel$supporting.reads)>10 , ]
-cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & abs(cnvnator$size)>50 & abs(cnvnator$normRDsignal)>1.8 ,]
+```{r filtering,echo=FALSE,message=FALSE}
+pindel.dup <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal) > 1.8 ,]
 lumpy.dup <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
 sim.dup <- simBed[simBed$svtype=="DUP",]
 
-head(pindel.dup)
-head(cnv.dup)
-head(lumpy.dup)
-head(sim.dup)
 ```
 
 
-```{r Granges,warning=FALSE}
+```{r Granges,warning=FALSE,echo=FALSE,message=FALSE}
 
 gRange.object <- function (object){
   sim <- object$sim
@@ -134,25 +181,22 @@ scores <- function (query,subject,algorithm,coverage) {
   FP <- length(res[res==0])
   present <- dim(subject)[1]
   detected <- dim(query)[1]
-  FDR <- round(((length(res[res==0]))/(length(res))),2)
+  FDR <- round(((length(res[res==0]))/(length(res))),2) 
   precision <- round(((TP)/(TP+FP)),2)
-
+  
   res1 <- countOverlaps(sim,test,type="any")
   FN <- (length(res1[res1==0]))
   sensitivity = round(((TP)/(TP+FN)),2)
-
-  analysis <-t(as.data.frame(as.matrix(c("dup",coverage,algorithm,present,detected,TP,FP,FN,FDR,precision,sensitivity))))
+  
+  analysis <-t(as.data.frame(as.matrix(c(type,coverage,algorithm,present,detected,TP,FP,FN,FDR,precision,sensitivity))))
   colnames(analysis) <- c("type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity")
   return (analysis)
 }
 
-cnv.dup.analysis<-scores(cnv.dup,sim.dup,"cnvnator",opt$d)
-lumpy.dup.analysis<-scores(lumpy.dup,sim.dup,"lumpy",opt$d)
-pindel.dup.analysis<-scores(pindel.dup,sim.dup,"pindel",opt$d)
-
-cnv.dup.analysis
-lumpy.dup.analysis
-pindel.dup.analysis
+cnv.dup.analysis<-scores(cnv.dup,sim.dup,"cnvnator",depth)
+lumpy.dup.analysis<-scores(lumpy.dup,sim.dup,"lumpy",depth)
+pindel.dup.analysis<-scores(pindel.dup,sim.dup,"pindel",depth)
+#breakdancer.dup.analysis<-scores(breakdancer.dup,sim.dup,"breakdancer",depth)
 
 if (dim(cnv.dup.analysis)[2]!=0){
   final <- rbind(cnv.dup.analysis)
@@ -164,37 +208,48 @@ if (dim(pindel.dup.analysis)[2]!=0){
 
 if (dim(lumpy.dup.analysis)[2]!=0){
   final <- rbind(final,lumpy.dup.analysis)
-}
+}   
 
+#if (dim(breakdancer.dup.analysis)[2]!=0){
+#  final <- rbind(final,breakdancer.dup.analysis)
+#}  
+
+rownames(final)<-c()
+final <- as.data.frame(final)
 
 final
-write.csv(final, file = paste0(opt$d,".xls"))
 
+write.csv(final, file = paste0(depth,".xls"))
 ```
 
 
-```{r Voting,warning=FALSE,message=FALSE}
+
+```{r Voting,warning=FALSE,message=FALSE,echo=FALSE}
 pindel.GR <- gRange.object(pindel.dup)
 cnv.GR <- gRange.object(cnv.dup)
-lumpy.GR <- gRange.object(lumpy.duph)
+lumpy.GR <- gRange.object(lumpy.dup)
+#breakdancer.GR <- gRange.object(breakdancer.dup)
 sim.GR <- gRange.object(sim.dup)
 
-length(pindel.GR)
-length(cnv.GR)
-length(lumpy.GR)
-length(sim.GR)
+#length(pindel.GR)
+#length(cnv.GR)
+#length(lumpy.GR)
+#length(sim.GR)
+#length(breakdancer.GR)
 
 pindel.vote <- sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 cnv.vote <- sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 lumpy.vote <- sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+#breakdancer.vote <- sapply(countOverlaps(sim.GR,breakdancer.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 
-votes <- as.data.frame(cbind(sim.dup$chrom.1,sim.dup$start,sim.dup$end,
+votes <- as.data.frame(cbind(type,sim.dup$sim, sim.dup$chrom.1,sim.dup$start,sim.dup$end,
                               as.numeric(sim.dup$end)-as.numeric(sim.dup$start)))
-colnames(votes) <- c("chrom","start","end","size")
+colnames(votes) <- c("type","sim","chrom","start","end","size")
 
 votes$pindel <- 0
 votes$cnvnator <- 0
 votes$lumpy <- 0
+#votes$breakdancer <- 0
 
 if (length(pindel.vote)>1){
   votes$pindel <- pindel.vote
@@ -202,7 +257,7 @@ if (length(pindel.vote)>1){
   votes$pindel <- 0
 }
            
-head(votes)
+#head(votes)
                 
 if (length(cnv.vote)>1){
   votes$cnvnator <- cnv.vote
@@ -210,7 +265,7 @@ if (length(cnv.vote)>1){
   votes$cnvnator <- 0
 }
 
-head(votes)
+#head(votes)
 
 if (length(lumpy.vote)>1){
   votes$lumpy <- lumpy.vote
@@ -218,29 +273,37 @@ if (length(lumpy.vote)>1){
   votes$lumpy  <- 0
 }
 
-head(votes)
+#head(votes)
+
+#if (length(breakdancer.vote)>1){
+#  votes$breakdancer <- breakdancer.vote
+#} else {
+#  votes$breakdancer <- 0
+#}
 
 votes$pindel <- as.numeric(votes$pindel)
 votes$lumpy <- as.numeric(votes$lumpy)
 votes$cnvnator <- as.numeric(votes$cnvnator)
+#votes$breakdancer <- as.numeric(votes$breakdancer)
 
 votes$pindel[votes$pindel==1] <- 0
 votes$cnvnator[votes$cnvnator==1] <- 0
 votes$lumpy[votes$lumpy==1] <- 0
+#votes$breakdancer[votes$breakdancer==1] <- 0
 
 votes$pindel[votes$pindel==2] <- 1
 votes$cnvnator[votes$cnvnator==2] <- 1
 votes$lumpy[votes$lumpy==2] <- 1
+#votes$breakdancer[votes$breakdancer==2] <- 1
 
-votes$PC <- (votes$pindel + votes$cnvnator)
-votes$PL <- (votes$pindel + votes$lumpy)
-votes$CL <- (votes$cnvnator + votes$lumpy)
-votes$PCL <- (votes$pindel + votes$cnvnator + votes$lumpy)
+votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
+#votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy + votes$breakdancer)
 
 votes <- votes[(order(votes$call,decreasing=TRUE)),]
 
-head(votes)
+(votes)
 
-write.csv(votes, file = paste0(opt$d,"_vote",".xls"))
+write.csv(votes, file = paste0(depth,"_vote",".xls"))
 ```
+
 
