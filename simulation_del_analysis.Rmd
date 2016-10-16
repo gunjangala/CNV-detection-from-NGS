@@ -222,8 +222,10 @@ votes$cnvnator[votes$cnvnator==2] <- 1
 votes$lumpy[votes$lumpy==2] <- 1
 
 
-
-votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
+votes$PC <- (votes$pindel + votes$cnvnator)
+votes$PL <- (votes$pindel + votes$lumpy)
+votes$CL <- (votes$cnvnator + votes$lumpy)
+votes$PCL <- (votes$pindel + votes$cnvnator + votes$lumpy)
 
 votes <- votes[(order(votes$call,decreasing=TRUE)),]
 
