@@ -219,7 +219,11 @@ final <- as.data.frame(final)
 
 final
 
+<<<<<<< HEAD
 write.csv(final, file = paste0(depth,type,".xls"))
+=======
+write.csv(final, file = paste0(depth,".xls"))
+>>>>>>> 973ea84f4d125e2dc79b3a394915111b1ba9f2a2
 ```
 
 
@@ -303,7 +307,11 @@ votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
 
 (votes)
 
+<<<<<<< HEAD
 write.csv(votes, file = paste0(depth,type,"_vote",".xls"))
+=======
+write.csv(votes, file = paste0(depth,"_vote",".xls"))
+>>>>>>> 973ea84f4d125e2dc79b3a394915111b1ba9f2a2
 ```
 
 
