@@ -1,22 +1,23 @@
 ---
-author: "Gunjan"
+title: "E06"
+author: "Gunjan Gala"
+date: "11/9/2016"
 output: html_document
 ---
 
-```{r}
+In the plots below, "red" color represents read depth of sample and "blue" color represents read depth of wild-type ie ancestral strain with GFp.
+
+```{r,eval=FALSE}
 # Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" -p <pindel output .txt> -c <cnvnator output .txt> -l <lumpy output .txt> -r <read depth .txt file>
 # This will out put a .md file and a directory named "figure" in your working directory
 # To view this .md (which is similar to .html file genearted by Rmarkdown, make sure that the .html and corresponding "figures" folder is in the same directory
 
 # Obtain read depth file for wild type before starting analysis
-
-```
-
-```{r reading files,echo=FALSE}
 library(optparse)
 library(knitr)
+```
 
-#setwd("~/Google Drive/Structural Variants/0_lab_data/ntr_78")
+```{r reading files,echo=FALSE,eval=FALSE}
 
 option_list <- list(
   make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
@@ -32,6 +33,19 @@ lumpy <- read.table(opt$l, quote="\"", comment.char="",stringsAsFactors = FALSE)
 readDepth <- read.delim(opt$r, header=FALSE,stringsAsFactors = FALSE)
 wt_readDepth <- read.delim("/scratch/ggg256/Lab/Structural_Variants/ntr_data/ntr_1/ntr_1_RD.txt", header=FALSE,stringsAsFactors = FALSE)
 
+```
+
+
+```{r,echo=FALSE}
+setwd("~/Google Drive/Structural Variants/steff_data")
+pindel <-read.table("~/Google Drive/Structural Variants/steff_data/del_E06_pindel.txt", quote="\"", comment.char="",stringsAsFactors = FALSE)
+cnvnator <- read.table("~/Google Drive/Structural Variants/steff_data/del_E06_cnv.txt", quote="\"", comment.char="",stringsAsFactors = FALSE)
+lumpy <- read.table("~/Google Drive/Structural Variants/steff_data/del_E06_lumpy.txt", quote="\"", comment.char="",stringsAsFactors = FALSE)
+readDepth <- read.delim("~/Google Drive/Structural Variants/steff_data/del_E06_RD.txt", header=FALSE,stringsAsFactors = FALSE)
+wt_readDepth <- read.delim("~/Google Drive/Structural Variants/steff_data/wt_RD.txt", header=FALSE,stringsAsFactors = FALSE)
+```
+
+```{r,echo=FALSE}
 ### assigning column names
 colnames(pindel)<-c("svtype","chrom.1","start","end","size","supporting.reads")
 colnames(cnvnator)<-c("svtype","chrom.1","start","end","size","normRDsignal")
@@ -46,8 +60,8 @@ mean(readDepth$depth)
 pindel<-pindel[pindel$chrom.1!="NC_001224.1",]
 cnvnator<-cnvnator[cnvnator$chrom.1!="NC_001224.1",]
 lumpy<-lumpy[lumpy$chrom.1!="NC_001224.1",]
-readDepth <- subset(readDepth, chromosome!="NC_001224.1")
-wt_readDepth <- subset(wt_readDepth, chromosome!="NC_001224.1")
+readDepth <- subset(readDepth,chromosome!="NC_001224.1")
+wt_readDepth <- subset(wt_readDepth,chromosome!="NC_001224.1")
 
 pindel<-pindel[pindel$svtype!="Provide",]
 cnvnator<-cnvnator[cnvnator$svtype!="Provide",]
@@ -69,7 +83,7 @@ lumpy_dup_filtered <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
 ```
 
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 #################################
 ########  Making plots ##########
 #################################
@@ -85,19 +99,22 @@ plot_readDepth <- function(wt_readDepth,readDepth,filtered_output){
   
   wt.mean.depth <- mean(wt_readDepth$depth)
   wt_readDepth$relative <- log2(wt_readDepth$depth/wt.mean.depth)
-  
+
   filtered_output<-as.data.frame(filtered_output)
   readDepth<-as.data.frame(readDepth)
   wt_readDepth <-as.data.frame(wt_readDepth)
+  
+  wt_readDepth <- wt_readDepth[!(wt_readDepth$relative=="-Inf"),]
+  readDepth <- readDepth[!(readDepth$relative=="-Inf"),]
   
   for (i in 1:nrow(filtered_output)){
     print (i)
     paste ("#############################################")
     
-    size <- filtered_output[i,]$size
+    size <- abs(filtered_output[i,]$size)
     surrounding.area <- size*2
     
-    if ((size/8)%%2==0){breaks <- (size/8)+1} else {breaks <- as.integer(size/8)}
+    if ((size/8)%%2==0){breaks <- (as.integer(size/8)+1)} else {breaks <- as.integer(size/8)}
  
     rd <- readDepth[(readDepth$chromosome==filtered_output[i,]$chrom.1) &
                   (readDepth$position>=(filtered_output[i,]$start-surrounding.area)) &
@@ -111,12 +128,12 @@ plot_readDepth <- function(wt_readDepth,readDepth,filtered_output){
      
     print (filtered_output[i,])
       
-    plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(relative value)")
+    plot(rd$position, rd$relative, pch=".",main=paste(filtered_output[i,]$svtype, filtered_output[i,]$chrom.1, filtered_output[i,]$start, filtered_output[i,]$end), xlab="position", ylab="log2(read.depth/mean(read.depth))",type="n")
     lines(rd$position,runmed(rd$relative,breaks), col="red")
     par(new=TRUE)
     lines(wt.rd$position,runmed(wt.rd$relative,breaks), col="blue")
-      par(new=FALSE)
-      par(mfrow=c(1,1))
+    par(new=FALSE)
+    par(mfrow=c(1,1))
   }
 }
 
@@ -124,7 +141,7 @@ plot_readDepth <- function(wt_readDepth,readDepth,filtered_output){
 
 
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 ### plotting deletions
 
 # storing deletions in cnv if present in any output and finally writing to cnv.xls
