@@ -107,6 +107,9 @@ simBed$svtype <- as.character(simBed$svtype)
 simBed$start <- as.integer(simBed$start)
 simBed$end <- as.integer(simBed$end)
 
+# getting rid of those duolications that have a negative end coordinate
+simBed <- simBed[!simBed$end<0,]
+
 pindel$sim <- as.character(pindel$sim)
 pindel$svtype <- as.character(pindel$svtype)
 pindel$chrom.1 <- as.character(pindel$chrom.1)
