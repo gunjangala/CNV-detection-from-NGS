@@ -1,4 +1,0 @@
-"","type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity"
-"V1","dup","dup","cnvnator","6","8","6","2","0","0.25","0.75","1"
-"V1","dup","dup","pindel","6","6","6","0","0","0","1","1"
-"V1","dup","dup","lumpy","6","6","6","0","0","0","1","1"
