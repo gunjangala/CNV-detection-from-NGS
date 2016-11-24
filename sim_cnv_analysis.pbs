@@ -188,6 +188,9 @@ python  /home/ggg256/scripts/parse_lumpy.py -f sim${PBS_ARRAYID}_lumpy.vcf > sim
 echo "lumpy done"
 
 ######################################################################################
+
+# saving space
+
 rm sim${PBS_ARRAYID}.sam
 rm sim${PBS_ARRAYID}.bam
 rm ${fastq1}.bam
@@ -209,7 +212,5 @@ rm sim${PBS_ARRAYID}_out.root
 rm sim${PBS_ARRAYID}.sorted.bam
 rm sim${PBS_ARRAYID}.sorted.bam.bai
 rm *bai
-done
 
-exit 0;
-
+echo "all done"

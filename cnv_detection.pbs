@@ -35,13 +35,11 @@ module load r/intel/3.2.2
 module load rstudio
 PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
 
-##################################################
-# running array jobs on all the ntr data
-for i in {76..87}
-do
 
 ##################################################
+
 #mkdir ntr_${PBS_ARRAYID}
+
 cd ntr_${PBS_ARRAYID}
 ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
 cp /scratch/cgsb/gencore/out/Gresham/2015-10-23_HK5NHBGXX/lib65-90/HK5NHBGXX_combined_n01_ntr_${PBS_ARRAYID}.fastq.gz .
@@ -221,6 +219,4 @@ cat tmp_${PBS_ARRAYID}.md | replace "Analyzing for CNVs" "ntr_${PBS_ARRAYID} CNV
 
 ######################################################################################
 
-done
-
-exit 0;
+echo "all done"
