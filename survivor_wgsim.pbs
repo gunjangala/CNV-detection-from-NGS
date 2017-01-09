@@ -24,9 +24,6 @@ RUNDIR=/scratch/ggg256/Lab/Structural_Variants/simulations/duplications/100x
 cd $RUNDIR
 j=`expr ${PBS_ARRAYID} % 10`
 
-for i in {1..100}
-do
-
 mkdir sim${PBS_ARRAYID}
 
 ############ note - parameters.txt file made before executing script.  Ensure that num of reads 
@@ -38,8 +35,6 @@ ${param_dir}/parameters_${j} \
 sim${PBS_ARRAYID}/sim${PBS_ARRAYID}
 
 wgsim -h -N 12100000 -1 50 -2 50 sim${PBS_ARRAYID}/sim${PBS_ARRAYID}.fasta sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
-
-done
 
 exit 0;
 
