@@ -8,7 +8,6 @@
 #PBS -l walltime=48:00:00
 #PBS -M ggg256@nyu.edu
 
-
 #############################################################################
 PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
 ref="/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna"
@@ -18,7 +17,6 @@ RUNDIR="/scratch/cgsb/gresham/Gunjan/mixed_pop"
 cd $RUNDIR
 mkdir mix_5_45
 cd mix_5_45
-
 CWD="/scratch/cgsb/gresham/Gunjan/mixed_pop/mix_5_45"
 ID1="sim5x"
 ID2="sim45x"
