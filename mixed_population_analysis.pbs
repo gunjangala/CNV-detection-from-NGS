@@ -17,6 +17,7 @@ RUNDIR="/scratch/cgsb/gresham/Gunjan/mixed_pop"
 cd $RUNDIR
 mkdir mix_5_45
 cd mix_5_45
+
 CWD="/scratch/cgsb/gresham/Gunjan/mixed_pop/mix_5_45"
 ID1="sim5x"
 ID2="sim45x"
@@ -26,6 +27,7 @@ mergeID="5_45_merged"
 module purge
 module load survivor/intel/20160421
 SURVIVOR 1 ${ref} ${param_dir}/parameters_5cnv 0 ${ID1}
+mv ${ID1}.bed ${mergeID}.bed
 
 module purge
 module load wgsim/intel/0.3.1
@@ -245,6 +247,9 @@ python  /home/ggg256/scripts/parse_lumpy.py \
 echo "lumpy done"
 
 ###########################
+module purge
+module load r/intel/3.3.1
+module load rstudio
 # FDR,Sensitivity,Precision,Fscore
 cp /home/ggg256/scripts/sim_mixed_pop_del.Rmd .
 Rscript -e "library(knitr); knit('sim_mixed_pop_del.Rmd')" \
