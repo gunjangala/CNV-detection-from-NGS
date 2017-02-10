@@ -1,0 +1,268 @@
+#!/bin/bash
+#PBS -V
+#PBS -N 10popDup
+#PBS -o /scratch/cgsb/gresham/Gunjan/mixed_pop/oe
+#PBS -e /scratch/cgsb/gresham/Gunjan/mixed_pop/oe
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=30GB
+#PBS -l walltime=48:00:00
+#PBS -M ggg256@nyu.edu
+
+#############################################################################
+PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
+ref="/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna"
+param_dir="/scratch/cgsb/gresham/Gunjan/mixed_pop/para_mix/duplications"
+RUNDIR="/scratch/cgsb/gresham/Gunjan/mixed_pop/duplications/10pop"
+#############################################################################
+cd $RUNDIR
+
+CWD="/scratch/cgsb/gresham/Gunjan/mixed_pop/duplications/10pop"
+ID1="sim5x"
+ID2="sim45x"
+mergeID="10cnv"
+cnvReads=432142
+NOcnvReads=3889286
+
+# Simulating a bam file with CNV 5X coverage
+module purge
+module load survivor/intel/20160421
+SURVIVOR 1 ${ref} ${param_dir}/parameters_5cnv 0 ${ID1}
+mv ${ID1}.bed ${mergeID}.bed
+
+module purge
+module load wgsim/intel/0.3.1
+wgsim -h -N ${cnvReads} -1 70 -2 70 ${ID1}.fasta -d 150 -s 5 \
+${ID1}_1.fq \
+${ID1}_2.fq
+
+fastq1=${ID1}_1.fq
+fastq2=${ID1}_2.fq
+
+module purge
+module load bwa/gnu/0.7.13
+module load samtools/intel/1.3
+bwa mem -t 16 $ref $fastq1 $fastq2 > ${ID1}.sam
+samtools view -bS ${ID1}.sam > ${ID1}.bam
+# _ _ _ _ _ 
+# Simulating a bam file with noCNV 45X coverage
+module purge
+module load survivor/intel/20160421
+SURVIVOR 1 ${ref} ${param_dir}/parameters_NOcnv 0 ${ID2}
+
+module purge
+module load wgsim/intel/0.3.1
+wgsim -h -N ${NOcnvReads} -1 70 -2 70 ${ID2}.fasta -d 150 -s 5 \
+${ID2}_1.fq \
+${ID2}_2.fq
+
+fastq3=${ID2}_1.fq
+fastq4=${ID2}_2.fq
+
+module purge
+module load bwa/gnu/0.7.13
+module load samtools/intel/1.3
+bwa mem -t 16 $ref $fastq3 $fastq4 > ${ID2}.sam
+samtools view -bS ${ID2}.sam > ${ID2}.bam
+echo "both bam files made"
+# _ _ _ _ _ 
+# merging bam files to obtain 10% CNV population sample file
+samtools merge ${mergeID}.bam ${ID1}.bam ${ID2}.bam
+samtools sort ${mergeID}.bam > ${mergeID}.sorted.bam
+samtools index ${mergeID}.sorted.bam
+
+module unload jdk
+module load picard-tools/1.129
+# obtaining alignment metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectAlignmentSummaryMetrics \
+R=$ref \
+I=${mergeID}.sorted.bam \
+O=${mergeID}_alignment_metrics.txt 
+
+# obtaining insert size metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectInsertSizeMetrics \
+INPUT=${mergeID}.sorted.bam  \
+OUTPUT=${mergeID}_insert_metrics.txt \
+HISTOGRAM_FILE=${mergeID}_insert_size_histogram.pdf 
+
+# obtaining read depth ie coverage using samtools
+module load samtools/intel/1.3
+samtools depth -a ${mergeID}.sorted.bam > ${mergeID}_RD.txt
+
+# removing duplicates from the sorted bam file and building index using picard
+java -jar $PICARD_JAR \
+MarkDuplicates \
+INPUT=${mergeID}.sorted.bam  \
+OUTPUT=${mergeID}_rm_dup.bam \
+METRICS_FILE=${mergeID}_rmdup_metrics.txt \
+REMOVE_DUPLICATES=true
+
+java -jar $PICARD_JAR \
+BuildBamIndex \
+INPUT=${mergeID}_rm_dup.bam
+
+#########################################################################################################
+# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
+bam1=${mergeID}_rm_dup.bam
+bam=${mergeID}.sorted.bam
+#########################################################################################################
+# obtain config file for pindel
+module purge
+module load breakdancer/intel/1.1.2
+bam2cfg.pl $bam -h > ${mergeID}_bd.cfg
+mean_insert_size="$(less ${mergeID}_bd.cfg | cut -f9)"
+mean_IS="$echo `expr substr $mean_insert_size 6 8`" 
+echo "${bam} ${mean_IS} ${mergeID}" > config_${mergeID}.txt
+
+module purge
+module load pindel/intel/0.2.5a4
+/share/apps/pindel/0.2.5a4/intel/bin/pindel \
+ -T 16 \
+ -f $ref \
+ -i config_${mergeID}.txt \
+ -c ALL \
+ -o ${mergeID}_output
+
+module load ipython
+# parsing files and obtaining necessary data in separate .txt file to be read in by R
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${mergeID}_output_D > ${mergeID}_pindel.txt
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${mergeID}_output_TD >> ${mergeID}_pindel.txt
+# parse pindel's output to obtain breakpoints 
+python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${mergeID}_output_D > ${mergeID}_pindel_novelseq.txt
+python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${mergeID}_output_TD >> ${mergeID}_pindel_novelseq.txt
+
+echo "pindel done"
+
+#########################################################################################################
+# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
+module load r/intel/3.3.1
+Rscript /home/ggg256/scripts/read_depth_for_bin_size.R \
+-r ${mergeID}_RD.txt \
+> ${mergeID}_readDepth.txt
+bin_size="$(cat ${mergeID}_readDepth.txt|replace \" ""|replace [1] "" )"
+
+# obtaining individual fasta files from reference file in the "same directory"
+# this step is very important for cnvnator to work
+# also check for reference file
+python /home/ggg256/scripts/fasta_to_each_chr.py
+# change individual fasta file names as per CNVnator requirements.
+mv NC_001133.9*fa NC_001133.9.fa
+mv NC_001134.8*fa NC_001134.8.fa
+mv NC_001135.5*fa NC_001135.5.fa
+mv NC_001136.10*fa NC_001136.10.fa
+mv NC_001137.3*fa NC_001137.3.fa
+mv NC_001138.5*fa NC_001138.5.fa
+mv NC_001139.9*fa NC_001139.9.fa
+mv NC_001140.6*fa NC_001140.6.fa
+mv NC_001141.2*fa NC_001141.2.fa
+mv NC_001142.9*fa NC_001142.9.fa
+mv NC_001143.9*fa NC_001143.9.fa
+mv NC_001144.5*fa NC_001144.5.fa
+mv NC_001145.3*fa NC_001145.3.fa
+mv NC_001146.8*fa NC_001146.8.fa
+mv NC_001147.6*fa NC_001147.6.fa
+mv NC_001148.4*fa NC_001148.4.fa
+mv NC_001224.1*fa NC_001224.1.fa
+
+module purge
+module load cnvnator/intel/0.3.2
+# predicting CNV regions
+cnvnator \
+-root ${mergeID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-unique 
+
+# generating histogram
+cnvnator \
+-root ${mergeID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-his ${bin_size} \
+
+# stats
+cnvnator \
+-root ${mergeID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-stat ${bin_size}
+
+# partition
+cnvnator \
+-root ${mergeID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-partition ${bin_size}
+
+# cnv calling
+cnvnator \
+-root ${mergeID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-call ${bin_size} > ${mergeID}_cnvnator.txt
+
+module load ipython
+python /home/ggg256/scripts/parse_cnvnator.py -f ${mergeID}_cnvnator.txt -t deletion > ${mergeID}_cnv.txt
+python /home/ggg256/scripts/parse_cnvnator.py -f ${mergeID}_cnvnator.txt -t duplication >> ${mergeID}_cnv.txt
+
+# deleting the individual fasta files to save space
+rm N*fa
+
+echo "cnvnator done"
+
+#########################################################################################################
+module purge
+module load samtools/intel/1.3
+module load bamaddrg
+samtools view -b -F 1294 $bam > discordants.bam
+samtools view -h $bam|/share/apps/lumpy/0.2.13/intel/scripts/extractSplitReads_BwaMem -i stdin| samtools view -Sb - > splitters.bam
+echo "splitters and discordants extracted"
+# adding read groups in bam file(s)
+bamaddrg -b $bam -s 50X > lumpy.merged.bam
+bamaddrg -b splitters.bam -s 50X > lumpy.splitters.bam
+bamaddrg -b discordants.bam -s 50X > lumpy.discordants.bam
+echo "bamaddrg done"
+# sort and index bam files
+samtools sort lumpy.merged.bam > lumpy.sorted.bam
+samtools sort lumpy.splitters.bam > splitters.sorted.bam
+samtools sort lumpy.discordants.bam > discordants.sorted.bam
+samtools index lumpy.sorted.bam
+samtools index splitters.sorted.bam
+samtools index discordants.sorted.bam
+echo "lumpy sorting and indexing done"
+
+module purge
+module load lumpy/intel/0.2.13
+/share/apps/lumpy/0.2.13/intel/scripts/lumpyexpress \
+-B lumpy.sorted.bam \
+-S splitters.sorted.bam \
+-D discordants.sorted.bam \
+-o ${mergeID}_lumpy.vcf
+
+module load ipython
+python  /home/ggg256/scripts/parse_lumpy.py \
+-f ${mergeID}_lumpy.vcf \
+> ${mergeID}_lumpy.txt
+echo "lumpy done"
+
+###########################
+module purge
+module load r/intel/3.3.1
+module load rstudio
+# FDR,Sensitivity,Precision,Fscore
+cp /home/ggg256/scripts/sim_mixed_pop_dup.Rmd .
+Rscript -e "library(knitr); knit('sim_mixed_pop_dup.Rmd')" \
+-p ${mergeID}_pindel.txt \
+-c ${mergeID}_cnv.txt \
+-l ${mergeID}_lumpy.txt \
+-s ${mergeID}.bed \
+-d ${mergeID} \
+-t dup
+
+###########################################
+rm *fq
+
+echo "all_done"
+
+
