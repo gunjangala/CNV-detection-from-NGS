@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -V
-#PBS -N mix_5.45
+#PBS -N 10popDel
 #PBS -o /scratch/cgsb/gresham/Gunjan/mixed_pop/oe
 #PBS -e /scratch/cgsb/gresham/Gunjan/mixed_pop/oe
 #PBS -l nodes=1:ppn=16
@@ -12,16 +12,14 @@
 PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
 ref="/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna"
 param_dir="/scratch/cgsb/gresham/Gunjan/mixed_pop/para_mix/deletions"
-RUNDIR="/scratch/cgsb/gresham/Gunjan/mixed_pop"
+RUNDIR="/scratch/cgsb/gresham/Gunjan/mixed_pop/deletions/10pop"
 #############################################################################
 cd $RUNDIR
-mkdir mix_5_45
-cd mix_5_45
 
-CWD="/scratch/cgsb/gresham/Gunjan/mixed_pop/mix_5_45"
+CWD="/scratch/cgsb/gresham/Gunjan/mixed_pop/deletions/10pop"
 ID1="sim5x"
 ID2="sim45x"
-mergeID="5_45_merged"
+mergeID="10cnv"
 
 # Simulating a bam file with CNV 5X coverage
 module purge
@@ -31,7 +29,7 @@ mv ${ID1}.bed ${mergeID}.bed
 
 module purge
 module load wgsim/intel/0.3.1
-wgsim -h -N 605000 -1 70 -2 70 ${ID1}.fasta -d 150 -s 5 \
+wgsim -h -N 432142 -1 70 -2 70 ${ID1}.fasta -d 150 -s 5 \
 ${ID1}_1.fq \
 ${ID1}_2.fq
 
@@ -51,7 +49,7 @@ SURVIVOR 1 ${ref} ${param_dir}/parameters_NOcnv 0 ${ID2}
 
 module purge
 module load wgsim/intel/0.3.1
-wgsim -h -N 5445000 -1 70 -2 70 ${ID2}.fasta -d 150 -s 5 \
+wgsim -h -N 3889286 -1 70 -2 70 ${ID2}.fasta -d 150 -s 5 \
 ${ID2}_1.fq \
 ${ID2}_2.fq
 
@@ -257,10 +255,11 @@ Rscript -e "library(knitr); knit('sim_mixed_pop_del.Rmd')" \
 -c ${mergeID}_cnv.txt \
 -l ${mergeID}_lumpy.txt \
 -s ${mergeID}.bed \
--d 10cnv \
+-d ${mergeID} \
 -t del
 
 ###########################################
+rm *fq
 
 echo "all_done"
 
