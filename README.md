@@ -4,15 +4,16 @@ Copy number variants (CNVs) encompass genes leading to dosage imbalances resulti
 
 Scripts in this folder can be used for following purpose(s):
 
-(Algorithms used: Lumpy(SR+RP), Cnvnator(RD) and Pindel(SR))
+(Algorithms used: [Lumpy(SR+RP)](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2014-15-6-r84)
+Lumpy(SR+RP), Cnvnator(RD), Pindel(SR) and SvABA)
 
 **Simulations:**
   + simulate and detect structural variants(SV) in reference genomes (.pbs file), 
-  + evaluate performances of tools/packages used in SV detection based on False discovery rate (FDR), precision, sensitivity and F-score (.Rmd file), and
-  + gives an overview of how many tools successfully detects total of simulated SVs.
-  + Analysis for cnv detection in mixed population samples.
+  + evaluate performances of tools/packages used in SV detection based on False discovery rate (FDR), precision, sensitivity and F-score (Rscript),
+  + gives an overview of how many tools successfully detects total of simulated SVs (Rscript), and
+  + Analysis for cnv detection in mixed population samples (Rscript).
   
 **Real/Lab data:**
-  + detect SVs present in yeast genomes.
-  + plot read depth vs position for variants detected in genomes as well as whole chromosomes.
-  + gives an overview of how many tools successfully detects total of SVs present in genomes.
+  + detect CNVs present in yeast genomes (.pbs file),
+  + plot read depth vs position for variants detected in genomes as well as whole chromosomes (Rscript), and
+  + gives an overview of how many tools successfully detects total of SVs present in genomes (Rscript).
