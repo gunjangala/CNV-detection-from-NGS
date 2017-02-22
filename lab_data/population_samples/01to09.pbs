@@ -1,0 +1,270 @@
+#!/bin/bash
+#PBS -V
+#PBS -N all
+#PBS -o /scratch/cgsb/gresham/Gunjan/oe_new_sample_analysis
+#PBS -e /scratch/cgsb/gresham/Gunjan/oe_new_sample_analysis
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=30GB
+#PBS -l walltime=48:00:00
+#PBS -M gunjan.gala@nyu.edu
+#PBS -t 1-9
+
+#############################################################################
+PICARD_JAR='/share/apps/picard-tools/1.129/picard.jar'
+ref="/scratch/work/cgsb/reference_genomes/In_house/Fungi/Saccharomyces_cerevisiae/UCSC_sacCer3_GAP1/sacCer3.fa"
+RUNDIR="/scratch/cgsb/gresham/Gunjan/new_sample_analysis"
+sample="sample"
+ID=${sample}_0${PBS_ARRAYID}
+
+cd $RUNDIR
+mkdir ${ID}
+cd ${ID}
+
+cp /scratch/cgsb/gencore/out/Gresham/2016-10-26_HG7CVAFXX/merged/HG7CVAFXX_n01_mini02_0${PBS_ARRAYID}.fastq.gz .
+cp /scratch/cgsb/gencore/out/Gresham/2016-10-26_HG7CVAFXX/merged/HG7CVAFXX_n02_mini02_0${PBS_ARRAYID}.fastq.gz .
+gunzip *n01*
+gunzip *n02*
+
+fastq1=HG7CVAFXX_n01_mini02_0${PBS_ARRAYID}.fastq
+fastq2=HG7CVAFXX_n02_mini02_0${PBS_ARRAYID}.fastq
+
+# fastqc analysis
+module purge
+module load fastqc
+fastqc $fastq1
+fastqc $fastq2
+
+######################### Alignment & Metrics  ###########################
+
+# performing bwa mem algorithm, sorting,indexing using samtools
+module purge
+module load bwa/gnu/0.7.13
+module load samtools/intel/1.3
+bwa mem -t 20 $ref $fastq1 $fastq2 > ${ID}.bam
+samtools sort ${ID}.bam > ${ID}.sorted.bam
+samtools index ${ID}.sorted.bam
+
+# obtaining alignment metrics using Picards tools
+module purge
+module load picard-tools/1.129
+java -jar $PICARD_JAR \
+CollectAlignmentSummaryMetrics \
+R=$ref \
+I=${ID}.sorted.bam \
+O=${ID}_alignment_metrics.txt 
+
+# obtaining insert size metrics using Picards tools
+java -jar $PICARD_JAR \
+CollectInsertSizeMetrics \
+INPUT=${ID}.sorted.bam  \
+OUTPUT=${ID}_insert_metrics.txt \
+HISTOGRAM_FILE=${ID}_insert_size_histogram.pdf 
+
+# obtaining read depth ie coverage using samtools
+module load samtools/intel/1.3
+samtools depth -a ${ID}.sorted.bam > ${ID}_RD.txt
+
+# removing duplicates from the sorted bam file and building index using picard
+java -jar $PICARD_JAR \
+MarkDuplicates \
+INPUT=${ID}.sorted.bam  \
+OUTPUT=${ID}.rm.dup.bam \
+METRICS_FILE=${ID}.rmdup.metrics.txt \
+REMOVE_DUPLICATES=true
+
+java -jar $PICARD_JAR \
+BuildBamIndex \
+INPUT=${ID}.rm.dup.bam
+
+# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
+bam1=${ID}.rm.dup.bam
+bam=${ID}.sorted.bam
+
+###################################################
+
+# obtain config file for pindel
+module purge
+module load breakdancer/intel/1.1.2
+bam2cfg.pl $bam -h > ${ID}_bd.cfg
+mean_insert_size="$(less ${ID}_bd.cfg | cut -f9)"
+mean_IS="$echo `expr substr $mean_insert_size 6 8`" 
+echo "${bam} ${mean_IS} ${ID}" > config_${ID}.txt
+
+module purge
+module load pindel/intel/0.2.5a4
+/share/apps/pindel/0.2.5a4/intel/bin/pindel \
+ -T 16 \
+ -f $ref \
+ -i config_${ID}.txt \
+ -c ALL \
+ -o ${ID}_output
+
+module load ipython
+# parsing files and obtaining necessary data in separate .txt file to be read in by R
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_D > ${ID}_pindel.txt
+python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_TD >> ${ID}_pindel.txt
+# parse pindel's output to obtain breakpoints 
+python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_D > ${ID}_pindel_novelseq.txt
+python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_TD >> ${ID}_pindel_novelseq.txt
+
+pindel2vcf -p ${ID}_output_D -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DEL_pindel.vcf
+pindel2vcf -p ${ID}_output_TD -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DUP_pindel.vcf
+
+echo "pindel done"
+
+###########################################################
+
+# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
+module load r/intel/3.3.1
+Rscript /home/ggg256/scripts/read_depth_for_bin_size.R \
+-r ${ID}_RD.txt \
+> ${ID}_readDepth.txt
+bin_size="$(cat ${ID}_readDepth.txt|replace \" ""|replace [1] "" )"
+
+# obtaining individual fasta files from reference file in the "same directory"
+# this step is very important for cnvnator to work
+# also check for reference file
+python /home/ggg256/scripts/GAP1_fasta_to_each_chr.py 
+
+module purge
+module load cnvnator/intel/0.3.2
+# predicting CNV regions
+cnvnator \
+-root ${ID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-unique 
+
+# generating histogram
+cnvnator \
+-root ${ID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-his ${bin_size} \
+
+# stats
+cnvnator \
+-root ${ID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-stat ${bin_size}
+
+# partition
+cnvnator \
+-root ${ID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-partition ${bin_size}
+
+# cnv calling
+cnvnator \
+-root ${ID}_out.root \
+-genome $ref \
+-tree $bam1 \
+-call ${bin_size} > ${ID}_cnvnator.txt
+
+module load ipython
+python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t deletion > ${ID}_cnv.txt
+python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t duplication >> ${ID}_cnv.txt
+
+# deleting the individual fasta files to save space
+rm c*fa
+
+echo "cnvnator done"
+
+###########################################################
+
+module purge
+module load samtools/intel/1.3
+module load bamaddrg
+samtools view -b -F 1294 $bam > discordants.bam
+samtools view -h $bam|/share/apps/lumpy/0.2.13/intel/scripts/extractSplitReads_BwaMem -i stdin| samtools view -Sb - > splitters.bam
+echo "splitters and discordants extracted"
+# adding read groups in bam file(s)
+bamaddrg -b $bam -s ${ID} > lumpy.merged.bam
+bamaddrg -b splitters.bam -s ${ID} > lumpy.splitters.bam
+bamaddrg -b discordants.bam -s ${ID} > lumpy.discordants.bam
+echo "bamaddrg done"
+# sort and index bam files
+samtools sort lumpy.merged.bam > lumpy.sorted.bam
+samtools sort lumpy.splitters.bam > splitters.sorted.bam
+samtools sort lumpy.discordants.bam > discordants.sorted.bam
+samtools index lumpy.sorted.bam
+samtools index splitters.sorted.bam
+samtools index discordants.sorted.bam
+echo "lumpy sorting and indexing done"
+
+module purge
+module load lumpy/intel/0.2.13
+/share/apps/lumpy/0.2.13/intel/scripts/lumpyexpress \
+-B lumpy.sorted.bam \
+-S splitters.sorted.bam \
+-D discordants.sorted.bam \
+-o ${ID}_lumpy.vcf
+
+module load ipython
+python  /home/ggg256/scripts/parse_lumpy.py \
+-f ${ID}_lumpy.vcf \
+> ${ID}_lumpy.txt
+echo "lumpy done"
+
+###########################
+mkdir SvABA
+cd SvABA
+module purge
+module load svaba/intel/20170210 
+svaba run -p 16 -G $ref -t ../$bam1
+gunzip -c no_id.alignments.txt.gz | grep contig_name > ${ID}_plot.txt
+cd ..
+
+##########################
+#mkdir annovar
+#cd annovar
+#module purge
+#module load annovar/20160201
+
+
+##########################
+module purge
+module load r/intel/3.3.1
+module load rstudio
+mkdir cnv_plots_${ID}
+cd cnv_plots_${ID}
+
+cp /home/ggg256/scripts/analyzing_for_CNVs.Rmd .
+
+Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" \
+-p ../${ID}_pindel.txt \
+-c ../${ID}_cnv.txt \
+-l ../${ID}_lumpy.txt \
+-r ../${ID}_RD.txt
+
+mv cnv.xls ${ID}_cnv.xls
+
+######################################################################################
+cd ..
+mkdir chr_plots_${ID}
+cd chr_plots_${ID}
+
+cp /home/ggg256/scripts/plot_RD_whole_chr_justSample_UCSC.Rmd .
+Rscript -e "library(knitr); knit('plot_RD_whole_chr_justSample_UCSC.Rmd')" \
+-r ../${ID}_RD.txt \
+-s ${ID}
+
+######################################################################################
+cd ..
+# VOTING :
+cp /home/ggg256/scripts/lab_data_voting.Rmd .
+
+Rscript -e "library(knitr); knit('lab_data_voting.Rmd')" \
+-p ${ID}_pindel.txt \
+-c ${ID}_cnv.txt \
+-l ${ID}_lumpy.txt \
+-s ${ID}
+
+mv lab_data_voting.md ${ID}_voting.md
+
+######################################################################################
+echo "ALL DONE"
+echo "all_done"
+
