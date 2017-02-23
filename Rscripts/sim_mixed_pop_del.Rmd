@@ -1,0 +1,175 @@
+---
+author: "Gunjan"
+output: html_document
+---
+```{r,eval=FALSE}
+
+
+cp /home/ggg256/scripts/sim_mixed_pop_del.Rmd .
+
+Rscript -e "library(knitr); knit('sim_mixed_pop_del.Rmd')" -p ${mergeID}_pindel.txt -c ${mergeID}_cnv.txt -l ${mergeID}_lumpy.txt -s ${mergeID}.bed -d 10cnv -t del
+
+ls *xls
+
+
+```
+
+```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("GenomicRanges")
+require(GenomicRanges)
+
+#install.packages("tidyr",repos = "http://cran.us.r-project.org")
+#install.packages("dplyr",repos = "http://cran.us.r-project.org")
+library(tidyr)
+library(dplyr)
+library(optparse)
+library(knitr)
+```
+
+
+```{r reading in the files,echo=FALSE}
+
+option_list <- list(
+  make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
+  make_option(c("-t", "--type"),action = "store",default = NULL,help="variant type"),
+  make_option(c("-b", "--breakdancer"),action = "store",default = NULL,help="breakdancer file"),
+  make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
+  make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
+  make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
+  make_option(c("-s", "--simBed"),action = "store",default = NULL,help="simBed file"))
+
+opt <- parse_args(OptionParser(option_list=option_list))
+
+print (opt$p)
+
+simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+
+pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+p_provide <- pind[(pind$V1=="Provide"),]
+pindel <- (pind %>% anti_join(p_provide))
+
+cnvnator <- read.csv(opt$c, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+
+lumpy <- read.csv(opt$l, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+
+depth <- opt$d
+type <- opt$t
+```
+
+```{r}
+pindel
+cnvnator
+lumpy
+type
+depth
+simBed
+```
+
+
+```{r data structures,echo=FALSE,message=FALSE}
+colnames(simBed) <- c("chrom.1","start","chrom.2","end","svtype")
+colnames(pindel)<-c("svtype","chrom.1","start","end","size","supporting.reads")
+colnames(cnvnator)<-c("svtype","chrom.1","start","end","size","normRDsignal")
+colnames(lumpy)<-c("svtype","chrom.1","start","end","size")
+
+simBed$chrom.1 <- as.character(simBed$chrom.1)
+simBed$chrom.2 <- as.character(simBed$chrom.2)
+simBed$svtype <- as.character(simBed$svtype)
+simBed$start <- as.integer(simBed$start)
+simBed$end <- as.integer(simBed$end)
+
+pindel$svtype <- as.character(pindel$svtype)
+pindel$chrom.1 <- as.character(pindel$chrom.1)
+pindel$start <- as.integer(pindel$start)
+pindel$end <- as.integer(pindel$end)
+pindel$size <- as.integer(pindel$size)
+pindel$supporting.reads <- as.integer(pindel$supporting.reads)
+
+cnvnator$svtype <- as.character(cnvnator$svtype)
+cnvnator$chrom.1 <- as.character(cnvnator$chrom.1)
+cnvnator$start <- as.integer(cnvnator$start)
+cnvnator$end <- as.integer(cnvnator$end)
+cnvnator$size <- as.integer(cnvnator$size)
+cnvnator$normRDsignal <- as.numeric(cnvnator$normRDsignal)
+
+lumpy$svtype <- as.character(lumpy$svtype)
+lumpy$chrom.1 <- as.character(lumpy$chrom.1)
+lumpy$start <- as.integer(lumpy$start)
+lumpy$end <- as.integer(lumpy$end)
+lumpy$size <- as.integer(abs(lumpy$size))
+
+```
+
+```{r filtering,echo=FALSE,message=FALSE}
+pindel.del <- pindel[pindel$svtype=="D" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
+cnv.del <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>50 & (cnvnator$normRDsignal) < 0.2 ,]
+lumpy.del <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
+sim.del <- simBed[simBed$svtype=="DEL",]
+```
+
+
+```{r Granges,warning=FALSE,echo=FALSE,message=FALSE}
+
+gRange.object <- function (object){
+  chr <- object$chrom.1 
+  start <- object$start
+  end <- object$end
+  gR <- GRanges(seqnames = paste0(chr), ranges = IRanges(start=start, end=end))
+  return (gR)
+}
+
+scores <- function (query,subject,algorithm,coverage) {
+  sim <- gRange.object(subject)
+  test <- gRange.object(query)
+  res <- countOverlaps(test,sim,type="any")
+  TP <- length(res[!res==0])
+  FP <- length(res[res==0])
+  present <- dim(subject)[1]
+  detected <- dim(query)[1]
+  FDR <- round(((length(res[res==0]))/(length(res))),2) 
+  precision <- round(((TP)/(TP+FP)),2)
+  
+  res1 <- countOverlaps(sim,test,type="any")
+  FN <- (length(res1[res1==0]))
+  sensitivity = round(((TP)/(TP+FN)),2)
+  
+  Fscore<-2*((precision*sensitivity)/(precision+sensitivity))
+  Fscore <- round(Fscore,3)
+    
+  analysis <-t(as.data.frame(as.matrix(c(type,coverage,algorithm,present,detected,TP,FP,FN,FDR,precision,sensitivity,Fscore))))
+  
+  colnames(analysis) <- c("type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity","Fscore")
+  return (analysis)
+}
+
+cnv.del.analysis<-scores(cnv.del,sim.del,"cnvnator",depth)
+lumpy.del.analysis<-scores(lumpy.del,sim.del,"lumpy",depth)
+pindel.del.analysis<-scores(pindel.del,sim.del,"pindel",depth)
+#breakdancer.del.analysis<-scores(breakdancer.del,sim.del,"breakdancer",depth)
+
+if (dim(cnv.del.analysis)[2]!=0){
+  final <- rbind(cnv.del.analysis)
+}
+
+if (dim(pindel.del.analysis)[2]!=0){
+  final <- rbind(final,pindel.del.analysis)
+}
+
+if (dim(lumpy.del.analysis)[2]!=0){
+  final <- rbind(final,lumpy.del.analysis)
+}   
+
+#if (dim(breakdancer.del.analysis)[2]!=0){
+#  final <- rbind(final,breakdancer.del.analysis)
+#}  
+
+#rownames(final)<-c()
+final <- as.data.frame(final)
+
+final
+
+write.csv(final, file=paste0(depth,"_",type,".xls"))
+```
+
+
