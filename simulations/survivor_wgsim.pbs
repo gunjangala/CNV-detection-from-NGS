@@ -1,40 +1,48 @@
 #!/bin/bash
 #PBS -V
 #PBS -N sim100_dup
-#PBS -o /scratch/ggg256/Lab/Structural_Variants/simulations/oe
-#PBS -e /scratch/ggg256/Lab/Structural_Variants/simulations/oe
-#PBS -l nodes=1:ppn=16
-#PBS -l mem=25GB
+#PBS -o /scratch/cgsb/gresham/Gunjan/oe
+#PBS -e /scratch/cgsb/gresham/Gunjan/oe
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=5GB
 #PBS -l walltime=48:00:00
 #PBS -M ggg256@nyu.edu
 #PBS -t 1-100
 
-##########################################################################
-module purge
-module load survivor/intel/20160421
-module load wgsim/intel/0.3.1 
-
-###########################################################################
-ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
-param_dir=/scratch/ggg256/Lab/Structural_Variants/simulations/param_dir/duplications
-
-#############################################################################
-
-RUNDIR=/scratch/ggg256/Lab/Structural_Variants/simulations/duplications/100x
-cd $RUNDIR
+# variable used in script
 j=`expr ${PBS_ARRAYID} % 10`
+type="deletions"
+folder="100x"
+num_reads=8642857
+read_length=70
+mean_insert_size=150
+sd_insert_size=15
 
+# paths to directories
+ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+param_dir=/scratch/ggg256/Lab/Structural_Variants/simulations/param_dir/${type}
+RUNDIR=/scratch/cgsb/gresham/Gunjan/${type}/${folder}
+
+cd $RUNDIR
 mkdir sim${PBS_ARRAYID}
 
-############ note - parameters.txt file made before executing script.  Ensure that num of reads 
-############ is sufficient for desired coverage.
-
+#note: parameters.txt file made before executing script. 
+module purge
+module load survivor/intel/20160421
 SURVIVOR 1 ${ref} \
 ${param_dir}/parameters_${j} \
 0 \
 sim${PBS_ARRAYID}/sim${PBS_ARRAYID}
 
-wgsim -h -N 12100000 -1 50 -2 50 sim${PBS_ARRAYID}/sim${PBS_ARRAYID}.fasta sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
+module purge
+module load wgsim/intel/0.3.1
+# N=8642857 for simulating 100X genomes with read length=70, insert size=150 (values are similar to real/lab data)
+wgsim -h -N ${num_reads} \
+-1 ${read_length} -2 ${read_length} \
+-d ${mean_insert_size} -s ${sd_insert_size} \
+sim${PBS_ARRAYID}/sim${PBS_ARRAYID}.fasta \
+sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq \
+sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
 
 exit 0;
 
