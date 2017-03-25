@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -V
-#PBS -N 100xDEL
+#PBS -N 80xDEL
 #PBS -o /scratch/cgsb/gresham/Gunjan/oe
 #PBS -e /scratch/cgsb/gresham/Gunjan/oe
 #PBS -l nodes=1:ppn=18
@@ -12,26 +12,24 @@
 
 # variable used in script
 type="deletions"
-folder="100x"  
-read_group="100x"
+folder="80x"  
+read_group="80x"
+downsample_value=0.8
 
 #paths to directories
-RUNDIR=/scratch/cgsb/gresham/Gunjan/${type}/${folder}
+RUNDIR=/scratch/cgsb/gresham/Gunjan/${type}
 ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+file_to_downsample=${RUNDIR}/100x/sim${PBS_ARRAYID}
 
-cd $RUNDIR/sim${PBS_ARRAYID}
+cd $RUNDIR/${folder}
+mkdir sim${PBS_ARRAYID}
+cd sim${PBS_ARRAYID}
 
-fastq1=$RUNDIR/sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_1.fq
-fastq2=$RUNDIR/sim${PBS_ARRAYID}/sim${PBS_ARRAYID}_2.fq
-
-#############################################################################
-
+#######
 module purge
-module load bwa/gnu/0.7.13
 module load samtools/intel/1.3
 
-bwa mem -t 16 $ref $fastq1 $fastq2 > sim${PBS_ARRAYID}.sam
-samtools view -bS sim${PBS_ARRAYID}.sam > sim${PBS_ARRAYID}.bam
+samtools view -b -s ${downsample_value} ${file_to_downsample}/sim${PBS_ARRAYID}.sorted.bam > sim${PBS_ARRAYID}.bam
 samtools sort sim${PBS_ARRAYID}.bam > sim${PBS_ARRAYID}.sorted.bam
 samtools index sim${PBS_ARRAYID}.sorted.bam
 
