@@ -225,7 +225,7 @@ rm no_id*
 rm sim${PBS_ARRAYID}_output_*
 rm sim${PBS_ARRAYID}_bd_output
 rm sim${PBS_ARRAYID}_out.root
-rm *bam
+#rm *bam
 rm *sam
 
 echo "ALL DONE"
