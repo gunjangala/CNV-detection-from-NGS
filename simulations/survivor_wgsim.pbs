@@ -1,17 +1,17 @@
 #!/bin/bash
 #PBS -V
-#PBS -N sim100_del
+#PBS -N sim100_dup
 #PBS -o /scratch/cgsb/gresham/Gunjan/oe
 #PBS -e /scratch/cgsb/gresham/Gunjan/oe
 #PBS -l nodes=1:ppn=1
 #PBS -l mem=5GB
-#PBS -l walltime=48:00:00
+#PBS -l walltime=04:00:00
 #PBS -M ggg256@nyu.edu
 #PBS -t 1-100
 
 # variable used in script
 j=`expr ${PBS_ARRAYID} % 10`
-type="deletions"
+type="duplications"
 folder="100x"
 num_reads=8642857
 read_length=70
