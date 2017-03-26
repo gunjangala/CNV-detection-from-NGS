@@ -212,10 +212,10 @@ module purge
 module load svaba/intel/20170210 
 svaba run -p 20 -G $ref -t RG.sorted.bam
 gunzip -c no_id.alignments.txt.gz | grep contig_name > ${ID}_plot.txt
-mv no_id.svaba.sv.vcf sim${PBS_ARRAYID}_svaba.vcf
 
 module load ipython
-python /home/ggg256/scripts/parse_svaba.py -f sim${PBS_ARRAYID}_svaba.vcf > sim${PBS_ARRAYID}_svaba.txt
+python /home/ggg256/scripts/parse_svaba_sv.py -f no_id.svaba.sv.vcf > sim${PBS_ARRAYID}_svaba.txt
+python /home/ggg256/scripts/parse_svaba_indel.py -f no_id.svaba.indel.vcf >> sim${PBS_ARRAYID}_svaba.txt
 echo "svaba done"
 
 # Removing big size unnecessary files for this simulation study to save on memory
