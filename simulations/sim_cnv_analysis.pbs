@@ -3,7 +3,7 @@
 #PBS -N 100xDEL
 #PBS -o /scratch/cgsb/gresham/Gunjan/oe
 #PBS -e /scratch/cgsb/gresham/Gunjan/oe
-#PBS -l nodes=1:ppn=18
+#PBS -l nodes=1:ppn=20
 #PBS -l mem=25GB
 #PBS -l walltime=48:00:00
 #PBS -M ggg256@nyu.edu
@@ -17,7 +17,7 @@ read_group="100x"
 
 #paths to directories
 RUNDIR=/scratch/cgsb/gresham/Gunjan/${type}/${folder}
-ref=/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna
+ref="/scratch/work/cgsb/reference_genomes/Public/Fungi/Saccharomyces_cerevisiae/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna"
 
 cd $RUNDIR/sim${PBS_ARRAYID}
 
@@ -30,7 +30,7 @@ module purge
 module load bwa/gnu/0.7.13
 module load samtools/intel/1.3
 
-bwa mem -t 16 $ref $fastq1 $fastq2 > sim${PBS_ARRAYID}.sam
+bwa mem -t 20 $ref $fastq1 $fastq2 > sim${PBS_ARRAYID}.sam
 samtools view -bS sim${PBS_ARRAYID}.sam > sim${PBS_ARRAYID}.bam
 samtools sort sim${PBS_ARRAYID}.bam > sim${PBS_ARRAYID}.sorted.bam
 samtools index sim${PBS_ARRAYID}.sorted.bam
@@ -84,7 +84,7 @@ echo "${bam} ${mean_IS} sim${PBS_ARRAYID}" > config_sim${PBS_ARRAYID}.txt
 module purge
 module load pindel/intel/0.2.5a4 
 /share/apps/pindel/0.2.5a4/intel/bin/pindel \
--T 16 \
+-T 20 \
 -f $ref \
 -i config_sim${PBS_ARRAYID}.txt \
 -c ALL \
@@ -173,31 +173,32 @@ module purge
 module load samtools/intel/1.3
 module load bamaddrg
 
+#obtaining discordants and split reads
 samtools view -b -F 1294 $bam > discordants.bam
 samtools view -h $bam|/share/apps/lumpy/0.2.13/intel/scripts/extractSplitReads_BwaMem -i stdin| samtools view -Sb - > splitters.bam
 echo "splitters and discordants extracted"
 
 # adding read groups in bam file(s)
-bamaddrg -b $bam -s ${read_group} > lumpy.merged.bam
-bamaddrg -b splitters.bam -s ${read_group} > lumpy.splitters.bam
-bamaddrg -b discordants.bam -s ${read_group} > lumpy.discordants.bam
+bamaddrg -b $bam -s ${read_group} > RG.bam
+bamaddrg -b splitters.bam -s ${read_group} > RG.splitters.bam
+bamaddrg -b discordants.bam -s ${read_group} > RG.discordants.bam
 echo "bamaddrg done"
 
 # sort and index bam files
-samtools sort lumpy.merged.bam > lumpy.sorted.bam
-samtools sort lumpy.splitters.bam > splitters.sorted.bam
-samtools sort lumpy.discordants.bam > discordants.sorted.bam
-samtools index lumpy.sorted.bam
-samtools index splitters.sorted.bam
-samtools index discordants.sorted.bam
+samtools sort RG.bam > RG.sorted.bam
+samtools sort RG.splitters.bam > RG.splitters.sorted.bam
+samtools sort RG.discordants.bam > RG.discordants.sorted.bam
+samtools index RG.sorted.bam
+samtools index RG.splitters.sorted.bam
+samtools index RG.discordants.sorted.bam
 echo "lumpy sorting and indexing done"
 
 module purge
 module load lumpy/intel/0.2.13
 /share/apps/lumpy/0.2.13/intel/scripts/lumpyexpress \
--B lumpy.sorted.bam \
--S splitters.sorted.bam \
--D discordants.sorted.bam \
+-B RG.sorted.bam \
+-S RG.splitters.sorted.bam \
+-D RG.discordants.sorted.bam \
 -o sim${PBS_ARRAYID}_lumpy.vcf
 
 module load ipython
@@ -205,9 +206,11 @@ python  /home/ggg256/scripts/parse_lumpy.py -f sim${PBS_ARRAYID}_lumpy.vcf > sim
 echo "lumpy done"
 
 ####
+# lumpy.sorted.bam is just  sorted bam file with RG and can be used as an input for svaba
+# it is important to include read groups for svaba to run
 module purge
 module load svaba/intel/20170210 
-svaba run -p 16 -G $ref -t ../$bam1
+svaba run -p 20 -G $ref -t RG.sorted.bam
 gunzip -c no_id.alignments.txt.gz | grep contig_name > ${ID}_plot.txt
 mv no_id.svaba.sv.vcf sim${PBS_ARRAYID}_svaba.vcf
 
@@ -222,8 +225,9 @@ rm no_id*
 rm sim${PBS_ARRAYID}_output_*
 rm sim${PBS_ARRAYID}_bd_output
 rm sim${PBS_ARRAYID}_out.root
+rm *bam
+rm *sam
 
 echo "ALL DONE"
 
 exit 0;
-
