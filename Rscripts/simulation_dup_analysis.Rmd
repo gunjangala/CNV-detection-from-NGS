@@ -13,6 +13,7 @@ output: html_document
 # -p pindel \
 # -c cnvnator \
 # -l lumpy \
+# -b svaba
 ```
 
 
@@ -34,7 +35,7 @@ library(knitr)
 option_list <- list(
   make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
   make_option(c("-t", "--type"),action = "store",default = NULL,help="variant type"),
-  make_option(c("-b", "--breakdancer"),action = "store",default = NULL,help="breakdancer file"),
+  make_option(c("-b", "--svaba"),action = "store",default = NULL,help="svaba file"),
   make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
   make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
   make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
@@ -42,24 +43,25 @@ option_list <- list(
 
 opt = parse_args(OptionParser(option_list=option_list))
 
-simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+simBed <- read.csv(opt$simBed,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
-#simBed <- simBed[simBed$chrom!="chr17",]
 
 pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
 colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
 p_provide <- pind[(pind$V2=="Provide"),]
 pindel <- (pind %>% anti_join(p_provide))
-#pindel <- pindel[pindel$V3!="chr17",]
 
 cnvnator <- read.csv(opt$c, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
-#cnvnator <- cnvnator[cnvnator$V2!="chr17",]
 
 lumpy <- read.csv(opt$l, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
-#lumpy<- lumpy[lumpy$V2!="chr17",]
+
+svaba <- read.csv(opt$svaba, sep=",",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+svaba <-(separate(data = svaba , col =V1, into = c("sim", "chrom"), sep = "_svaba.txt:"))
+svaba$V4 <- as.numeric(svaba$V2) + as.numeric(as.character(svaba$V3))
+svaba <- svaba[complete.cases(svaba),]
 
 depth=opt$d
 type=opt$t
@@ -99,6 +101,7 @@ colnames(pindel)<-c("sim","svtype","chrom.1","start","end","size","supporting.re
 colnames(cnvnator)<-c("sim","svtype","chrom.1","start","end","size","normRDsignal")
 colnames(lumpy)<-c("sim","svtype","chrom.1","start","end","size")
 colnames(simBed) <- c("sim","chrom.1","start","chrom.2","end","svtype")
+colnames(svaba) <- c("sim","chrom.1","start","size","end")
 
 simBed$sim <- as.character(simBed$sim)
 simBed$chrom.1 <- as.character(simBed$chrom.1)
@@ -132,6 +135,13 @@ lumpy$chrom.1 <- as.character(lumpy$chrom.1)
 lumpy$start <- as.integer(lumpy$start)
 lumpy$end <- as.integer(lumpy$end)
 lumpy$size <- as.integer(abs(lumpy$size))
+
+svaba$sim <- as.character(svaba$sim)
+svaba$chrom.1 <- as.character(svaba$chrom.1)
+svaba$start <- as.integer(svaba$start)
+svaba$size <- as.integer(svaba$size)
+svaba$end <- as.integer(svaba$end)
+
 ```
 
 
@@ -139,7 +149,10 @@ lumpy$size <- as.integer(abs(lumpy$size))
 pindel.dup <- pindel[pindel$svtype=="TD" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
 cnv.dup <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>50 & (cnvnator$normRDsignal) > 1.8 ,]
 lumpy.dup <- lumpy[lumpy$svtype=="DUP" & (abs(lumpy$size))>50 ,]
+svaba.dup <- svaba[abs(svaba$size)>50,]
 sim.dup <- simBed[simBed$svtype=="DUP",]
+
+print (svaba.dup)
 ```
 
 Performance of algorithms :
@@ -183,6 +196,7 @@ scores <- function (query,subject,algorithm,coverage) {
 cnv.dup.analysis<-scores(cnv.dup,sim.dup,"cnvnator",depth)
 lumpy.dup.analysis<-scores(lumpy.dup,sim.dup,"lumpy",depth)
 pindel.dup.analysis<-scores(pindel.dup,sim.dup,"pindel",depth)
+svaba.dup.analysis<-scores(svaba.dup,sim.dup,"svaba",depth)
 
 if (dim(cnv.dup.analysis)[2]!=0){
   final <- rbind(cnv.dup.analysis)
@@ -195,6 +209,13 @@ if (dim(pindel.dup.analysis)[2]!=0){
 if (dim(lumpy.dup.analysis)[2]!=0){
   final <- rbind(final,lumpy.dup.analysis)
 }   
+
+if (dim(svaba.dup.analysis)[2]!=0){
+  final <- rbind(final,svaba.dup.analysis)
+} 
+
+print ("SVABA")
+print (svaba.dup.analysis)
 
 rownames(final)<-c()
 final <- as.data.frame(final)
@@ -210,6 +231,7 @@ Votes :
 pindel.GR <- gRange.object(pindel.dup)
 cnv.GR <- gRange.object(cnv.dup)
 lumpy.GR <- gRange.object(lumpy.dup)
+svaba.GR <- gRange.object(svaba.dup)
 sim.GR <- gRange.object(sim.dup)
 
 #length(pindel.GR)
@@ -221,6 +243,7 @@ sim.GR <- gRange.object(sim.dup)
 pindel.vote <- sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 cnv.vote <- sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 lumpy.vote <- sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+svaba.vote <- sapply(countOverlaps(sim.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 
 votes <- as.data.frame(cbind(type,sim.dup$sim, sim.dup$chrom.1,sim.dup$start,sim.dup$end,
                               as.numeric(sim.dup$end)-as.numeric(sim.dup$start)))
@@ -228,7 +251,8 @@ colnames(votes) <- c("type","sim","chrom","start","end","size")
 
 votes$pindel <- 0
 votes$cnvnator <- 0
-votes$lumpy <- 0
+votes$lumpy <- 
+votes$svaba <- 0
 
 if (length(pindel.vote)>1){
   votes$pindel <- pindel.vote
@@ -252,19 +276,29 @@ if (length(lumpy.vote)>1){
   votes$lumpy  <- 0
 }
 
+if (length(svaba.vote)>1){
+  votes$svaba <- svaba.vote
+} else {
+  votes$svaba <- 0
+}
+
+
 votes$pindel <- as.numeric(votes$pindel)
 votes$lumpy <- as.numeric(votes$lumpy)
 votes$cnvnator <- as.numeric(votes$cnvnator)
+votes$svaba <- as.numeric(votes$svaba)
 
 votes$pindel[votes$pindel==1] <- 0
 votes$cnvnator[votes$cnvnator==1] <- 0
-votes$lumpy[votes$lumpy==1] <- 0
+votes$lumpy[votes$lumpy==1] <- 
+votes$svaba[votes$svaba==1] <- 0
 
 votes$pindel[votes$pindel==2] <- 1
 votes$cnvnator[votes$cnvnator==2] <- 1
-votes$lumpy[votes$lumpy==2] <- 1
+votes$lumpy[votes$lumpy==2] <- 
+votes$svaba[votes$svaba==2] <- 1
 
-votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
+votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy + votes$svaba)
 
 #votes <- votes[(order(votes$call,decreasing=TRUE)),]
 
@@ -273,4 +307,73 @@ votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
 write.csv(votes, file = paste0(depth,type,"_vote",".xls"))
 ```
 
+```{r,echo=FALSE,message=FALSE,warning=FALSE,eval=FALSE}
+
+## PINDEL
+sim.dup <- simBed[simBed$svtype=="DUP",]
+size.reads <- NULL
+infoz <- data.frame()
+for (x.size in seq(50,200,10)){
+  for (x.reads in seq(2,50,2)){
+    p <- pindel[pindel$svtype=="TD" & (pindel$size)>=(x.size) & (pindel$supporting.reads)>=(x.reads) , ]
+    final <- scores(p,sim.dup,"pindel",depth)
+    infoz <- as.data.frame(cbind(x.size,x.reads,final))
+    print (c(x.size,x.reads))
+    size.reads <- as.data.frame(rbind(size.reads,infoz))
+  }
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.pindel <- size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),]
+#best.pindel
+
+## CNVNATOR
+size.reads <- NULL
+info <- NULL
+for (x.size in seq(50,200,10)){
+  for (x.reads in seq(1.5,2.0,0.01)){
+    c <- cnvnator[cnvnator$svtype=="duplication" & (cnvnator$size)>=x.size & (cnvnator$normRDsignal) >= x.reads ,]
+    final <- scores(c,sim.dup,"cnvnator",depth)
+    info <- as.data.frame(cbind(x.size,x.reads,final))
+    print (c(x.size,x.reads))
+    size.reads <- as.data.frame(rbind(size.reads,info))
+  }
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.cnvnator <- as.data.frame(size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),])
+#best.cnvnator
+
+### LUMPY
+size.reads <- NULL
+info <- NULL
+x.reads <- NULL
+x.size <- NULL
+
+for (x.size in seq(50,200,10)){
+
+  l <- lumpy[lumpy$svtype=="DUP" & (lumpy$size)>=(x.size), ]
+  final <- scores(l,sim.dup,"lumpy",depth)
+  zero <- 0
+  info <- as.data.frame(cbind(x.size,zero,final))
+  print (c(x.size))
+  size.reads <- as.data.frame(rbind(size.reads,info))
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.lumpy <- size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),]
+#best.lumpy
+
+best.parameters <- as.data.frame(rbind(best.pindel,best.cnvnator,best.pindel))
+rownames(best.parameters) <- NULL
+colnames(best.parameters) <- c("size","supporting.reads","type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity","Fscore")
+
+best.parameters
+
+write.csv(best.parameters, file = paste0(depth,type,"_bestParameters",".xls"))
+
+```
 
