@@ -3,22 +3,16 @@ author: "Gunjan"
 output: html_document
 ---
 ```{r,eval=FALSE}
-
-
+# copy file in current directory
 cp /home/ggg256/scripts/sim_mixed_pop_del.Rmd .
-
 Rscript -e "library(knitr); knit('sim_mixed_pop_del.Rmd')" -p ${mergeID}_pindel.txt -c ${mergeID}_cnv.txt -l ${mergeID}_lumpy.txt -s ${mergeID}.bed -d 10cnv -t del
-
 ls *xls
-
-
 ```
 
 ```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
 #source("https://bioconductor.org/biocLite.R")
 #biocLite("GenomicRanges")
 require(GenomicRanges)
-
 #install.packages("tidyr",repos = "http://cran.us.r-project.org")
 #install.packages("dplyr",repos = "http://cran.us.r-project.org")
 library(tidyr)
@@ -29,7 +23,6 @@ library(knitr)
 
 
 ```{r reading in the files,echo=FALSE}
-
 option_list <- list(
   make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
   make_option(c("-t", "--type"),action = "store",default = NULL,help="variant type"),
