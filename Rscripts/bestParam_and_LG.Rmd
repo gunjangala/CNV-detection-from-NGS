@@ -1,0 +1,158 @@
+
+```{r Voting,warning=FALSE,message=FALSE,echo=FALSE,eval=FALSE}
+pindel.GR <- gRange.object(pindel.del)
+cnv.GR <- gRange.object(cnv.del)
+lumpy.GR <- gRange.object(lumpy.del)
+svaba.GR <- gRange.object(svaba.del)
+sim.GR <- gRange.object(sim.del)
+
+pindel.vote <- sapply(countOverlaps(pindel.GR,sim.GR,type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+cnv.vote <- sapply(countOverlaps(cnv.GR,sim.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+lumpy.vote <- sapply(countOverlaps(lumpy.GR,sim.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+svaba.vote <- sapply(countOverlaps(svaba.GR,sim.GR,type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+
+
+
+
+pindel.fp.1 <- pindel.del[which(pindel.vote==1),]
+cnv.fp.1 <- cnv.del[which(cnv.vote==1),]
+lumpy.fp.1 <- lumpy.del[which(lumpy.vote==1),]
+svaba.fp.1 <- svaba.del[which(svaba.vote==1),]
+
+pindel.fp <- subset(pindel.fp.1,select=c(sim,chrom.1,start,end))
+cnv.fp <- subset(cnv.fp.1,select=c(sim,chrom.1,start,end))
+lumpy.fp <- subset(lumpy.fp.1,select=c(sim,chrom.1,start,end))
+svaba.fp <- subset(svaba.fp.1,select=c(sim,chrom.1,start,end))
+
+MAIN.DF <- data.frame()
+
+if (dim(pindel.fp)[1]>0) {
+  fp.df.pindel <- pindel.fp
+  n <- dim(pindel.fp)[1]
+  fp.df.pindel$pindel <-rep(1,n)
+  fp.df.pindel$cnvnator <- rep(0,n)
+  fp.df.pindel$lumpy <- rep(0,n)
+  fp.df.pindel$svaba <- rep(0,n)
+  MAIN.DF <- rbind(MAIN.DF,fp.df.pindel)
+}
+
+if (dim(cnv.fp)[1]>0) {
+  fp.df.cnv <- cnv.fp
+  n <- dim(cnv.fp)[1]
+  fp.df.cnv$pindel<- rep(0,n)
+  fp.df.cnv$cnvnator <-rep(1,n)
+  fp.df.cnv$lumpy <- rep(0,n)
+  fp.df.cnv$svaba<- rep(0,n)
+  MAIN.DF <- rbind(MAIN.DF,fp.df.cnv)
+}
+
+if (dim(lumpy.fp)[1]>0) {
+  fp.df.lumpy <- lumpy.fp
+  n <- dim(lumpy.fp)[1]
+  fp.df.lumpy$pindel <- rep(0,n)
+  fp.df.lumpy$cnvnator <- rep(0,n)
+  fp.df.lumpy$lumpy <-rep(1,n)
+  fp.df.lumpy$svaba <- rep(0,n)
+  MAIN.DF <- rbind(MAIN.DF,fp.df.lumpy)
+}
+
+if (dim(svaba.fp)[1]>0) {
+  fp.df.svaba <- svaba.fp
+  n <- dim(svaba.fp)[1]
+  fp.df.svaba$pindel <- rep(0,n)
+  fp.df.svaba$cnvnator <- rep(0,n)
+  fp.df.svaba$lumpy <- rep(0,n)
+  fp.df.svaba$svaba <-rep(1,n)
+  MAIN.DF <- rbind(MAIN.DF,fp.df.svaba)
+}
+
+MAIN.DF.2 <- data.frame()
+MAIN.DF.2 <- subset(MAIN.DF,select=c(pindel,cnvnator,lumpy,svaba))
+MAIN.DF.2$truth <- 0
+
+LG.DATA <- data.frame()
+LG.DATA <- as.data.frame(rbind(MAIN.DF.1,MAIN.DF.2))
+LG.DATA$pindel <- as.factor(LG.DATA$pindel)
+LG.DATA$cnvnator <- as.factor(LG.DATA$cnvnator)
+LG.DATA$lumpy <- as.factor(LG.DATA$lumpy)
+LG.DATA$svaba <- as.factor(LG.DATA$svaba)
+LG.DATA$truth <- as.factor(LG.DATA$truth)
+
+#x <- LG.DATA[complete.cases(LG.DATA),]
+
+logit.reg <- glm(truth~.,data=LG.DATA,family = "binomial")
+summary(logit.reg)
+
+anova <- anova(logit.reg,test="Chisq")
+
+```
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,eval=FALSE}
+
+## PINDEL
+sim.del <- simBed[simBed$svtype=="DEL",]
+size.reads <- NULL
+for (x.size in seq(50,200,10)){
+  for (x.reads in seq(2,50,2)){
+    p <- pindel[pindel$svtype=="D" & (pindel$size)>=(x.size) & (pindel$supporting.reads)>=(x.reads) , ]
+    final <- scores(p,sim.del,"pindel",depth)
+    info <- as.data.frame(cbind(x.size,x.reads,final))
+    print (c(x.size,x.reads))
+    size.reads <- as.data.frame(rbind(size.reads,info))
+  }
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.pindel <- size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),]
+#best.pindel
+
+## CNVNATOR
+size.reads <- NULL
+info <- NULL
+for (x.size in seq(50,200,10)){
+  for (x.reads in seq(0.01,0.5,0.01)){
+    c <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>=x.size & (cnvnator$normRDsignal) <= x.reads ,]
+    final <- scores(c,sim.del,"cnvnator",depth)
+    info <- as.data.frame(cbind(x.size,x.reads,final))
+    print (c(x.size,x.reads))
+    size.reads <- as.data.frame(rbind(size.reads,info))
+  }
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.cnvnator <- as.data.frame(size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),])
+#best.cnvnator
+
+### LUMPY
+size.reads <- NULL
+info <- NULL
+x.reads <- NULL
+x.size <- NULL
+
+for (x.size in seq(50,200,10)){
+  
+  l <- lumpy[lumpy$svtype=="DEL" & (lumpy$size)>=(x.size), ]
+  final <- scores(l,sim.del,"lumpy",depth)
+  zero <- 0
+  info <- as.data.frame(cbind(x.size,zero,final))
+  print (c(x.size))
+  size.reads <- as.data.frame(rbind(size.reads,info))
+}
+size.reads <- size.reads[size.reads$Fscore!="NaN",]
+size.reads$FDR <- as.numeric(as.character(size.reads$FDR))
+size.reads$Fscore <- as.numeric(as.character(size.reads$Fscore))
+best.lumpy <- size.reads[size.reads$Fscore==max(size.reads$Fscore) & size.reads$FDR==min(size.reads$FDR),]
+#best.lumpy
+
+best.parameters <- as.data.frame(rbind(best.pindel,best.cnvnator,best.lumpy))
+rownames(best.parameters) <- NULL
+colnames(best.parameters) <- c("size","supporting.reads","type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity","Fscore")
+
+best.parameters
+
+write.csv(best.parameters, file = paste0(depth,type,"_bestParameters",".xls"))
+
+```
+
