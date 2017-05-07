@@ -1,4 +1,5 @@
-library(shape)
+install.packages("sfsmisc")
+library(sfsmisc)
 
 setwd("/home/ggg256/RD")
 sample_1 <- read.delim("sample_01_RD.txt", header=FALSE)
