@@ -2,7 +2,7 @@
 author: "Gunjan"
 output: html_document
 ---
-```{r}
+  ```{r}
 # transfer all .bed files in same directory and then do : grep "" .bed > simBed.txt. Do similarly for all the files
 
 # use the following on command line
@@ -13,8 +13,15 @@ output: html_document
 # -p pindel \
 # -c cnvnator \
 # -l lumpy \
-```
+# -b svaba
 
+# example as follows:
+# cp /home/ggg256/scripts/simulation_del_analysis.Rmd .
+# Rscript -e "library(knitr); knit('simulation_del_analysis.Rmd')" -p ${coverage}_pindel.txt \
+# -c ${coverage}_cnv.txt \
+# -l ${coverage}_lumpy.txt -b ${coverage}_svaba.txt \
+# -s ${path_to_simBed_file} -d ${coverage} -t ${variant_type}
+```
 
 ```{r,echo=FALSE,warning=FALSE,results='hide',message=FALSE}
 #source("https://bioconductor.org/biocLite.R")
@@ -30,11 +37,12 @@ library(knitr)
 ```
 
 ```{r reading in the files,echo=FALSE}
+# reading in files and clean-up
 
 option_list <- list(
   make_option(c("-d", "--depth"),action = "store",default = NULL,help="depth"),
   make_option(c("-t", "--type"),action = "store",default = NULL,help="variant type"),
-  make_option(c("-b", "--breakdancer"),action = "store",default = NULL,help="breakdancer file"),
+  make_option(c("-b", "--svaba"),action = "store",default = NULL,help="svaba file"),
   make_option(c("-p", "--pindel"),action = "store",default = NULL,help="pindel file"),
   make_option(c("-c", "--cnvnator"),action = "store",default = NULL,help="cnvnator file"),
   make_option(c("-l", "--lumpy"),action = "store",default = NULL,help="lumpy file"),
@@ -42,65 +50,36 @@ option_list <- list(
 
 opt = parse_args(OptionParser(option_list=option_list))
 
-simBed <- read.csv(opt$s,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+simBed <- read.csv(opt$simBed,sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
-#simBed <- simBed[simBed$chrom!="chr17",]
 
 pind <- read.csv(opt$p,sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
 colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
 p_provide <- pind[(pind$V2=="Provide"),]
 pindel <- (pind %>% anti_join(p_provide))
-#pindel <- pindel[pindel$V3!="chr17",]
 
 cnvnator <- read.csv(opt$c, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
-#cnvnator <- cnvnator[cnvnator$V2!="chr17",]
 
 lumpy <- read.csv(opt$l, sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
 lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
-#lumpy<- lumpy[lumpy$V2!="chr17",]
+
+svaba <- read.csv(opt$svaba, sep=",",comment.char="",header=FALSE,stringsAsFactors = FALSE)
+svaba <- svaba[complete.cases(svaba),]
+svaba <-(separate(data = svaba , col =V1, into = c("sim", "chrom"), sep = "_svaba.txt:"))
+svaba$V4 <- abs(svaba$V2)+abs(svaba$V3)
 
 depth=opt$d
 type=opt$t
 ```
 
-
-
-```{r,echo=FALSE,message=FALSE,eval=FALSE}
-setwd("~/Google Drive/simulations/simulation files to work with for Rcode")
-
-depth="100X"
-type="del"
-
-simBed <- read.csv("100_bed.txt",sep="\t",comment.char="",header=FALSE,stringsAsFactors = FALSE)
-simBed <- (separate(data = simBed, col =V1, into = c("sim", "chrom"), sep = ".bed:"))
-#simBed <- simBed[simBed$chrom!="chr17",]
-
-pind <- read.csv("100_pindel.txt",sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
-pind <- (separate(data = pind , col =V1, into = c("sim", "chrom"), sep = "_pindel.txt:"))
-colnames(pind) <- c("V1","V2","V3","V4","V5","V6","V7")
-p_provide <- pind[(pind$V2=="Provide"),]
-pindel <- (pind %>% anti_join(p_provide))
-#pindel <- pindel[pindel$V3!="chr17",]
-
-cnvnator <- read.csv("100_cnv.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
-cnvnator <-(separate(data = cnvnator , col =V1, into = c("sim", "chrom"), sep = "_cnv.txt:"))
-#cnvnator <- cnvnator[cnvnator$V2!="chr17",]
-
-lumpy <- read.csv("100_lumpy.txt", sep=" ",comment.char="",header=FALSE,stringsAsFactors = FALSE)
-lumpy <-(separate(data = lumpy , col =V1, into = c("sim", "chrom"), sep = "_lumpy.txt:"))
-#lumpy<- lumpy[lumpy$V2!="chr17",]
-
-```
-
-
 ```{r data structures,echo=FALSE,message=FALSE}
 colnames(pindel)<-c("sim","svtype","chrom.1","start","end","size","supporting.reads")
 colnames(cnvnator)<-c("sim","svtype","chrom.1","start","end","size","normRDsignal")
 colnames(lumpy)<-c("sim","svtype","chrom.1","start","end","size")
-#colnames(breakdancer)<-c("sim","svtype","chrom.1","start","chrom.2","end","size","supporting.reads")
 colnames(simBed) <- c("sim","chrom.1","start","chrom.2","end","svtype")
+colnames(svaba) <- c("sim","chrom.1","start","size","end")
 
 simBed$sim <- as.character(simBed$sim)
 simBed$chrom.1 <- as.character(simBed$chrom.1)
@@ -132,18 +111,25 @@ lumpy$start <- as.integer(lumpy$start)
 lumpy$end <- as.integer(lumpy$end)
 lumpy$size <- as.integer(abs(lumpy$size))
 
+svaba$sim <- as.character(svaba$sim)
+svaba$chrom.1 <- as.character(svaba$chrom.1)
+svaba$start <- as.integer(svaba$start)
+svaba$size <- as.integer(svaba$size)
+svaba$end <- as.integer(svaba$end)
 ```
 
 ```{r filtering,echo=FALSE,message=FALSE}
+# selecting for "deletions"
 pindel.del <- pindel[pindel$svtype=="D" & (pindel$size)>50 & (pindel$supporting.reads)>10 , ]
 cnv.del <- cnvnator[cnvnator$svtype=="deletion" & (cnvnator$size)>50 & (cnvnator$normRDsignal) < 0.2 ,]
 lumpy.del <- lumpy[lumpy$svtype=="DEL" & (abs(lumpy$size))>50 ,]
+svaba.del <- svaba[abs(svaba$size)>50,]
 sim.del <- simBed[simBed$svtype=="DEL",]
 ```
 
 
 ```{r Granges,warning=FALSE,echo=FALSE,message=FALSE}
-
+# this function would convert input dataframe to a GRange object
 gRange.object <- function (object){
   sim <- object$sim
   chr <- object$chrom.1 
@@ -152,6 +138,8 @@ gRange.object <- function (object){
   gR <- GRanges(seqnames = paste0(sim,chr), ranges = IRanges(start=start, end=end))
   return (gR)
 }
+
+# this function would estimate performance parameters for pindel/lumpy/CNVnator/Svaba using Grange objects
 
 scores <- function (query,subject,algorithm,coverage) {
   sim <- gRange.object(subject)
@@ -170,7 +158,7 @@ scores <- function (query,subject,algorithm,coverage) {
   
   Fscore<-2*((precision*sensitivity)/(precision+sensitivity))
   Fscore <- round(Fscore,3)
-    
+  
   analysis <-t(as.data.frame(as.matrix(c(type,coverage,algorithm,present,detected,TP,FP,FN,FDR,precision,sensitivity,Fscore))))
   
   colnames(analysis) <- c("type","coverage","algorithm","#present","#detected","TP","FP","FN","FDR","precision","sensitivity","Fscore")
@@ -180,113 +168,71 @@ scores <- function (query,subject,algorithm,coverage) {
 cnv.del.analysis<-scores(cnv.del,sim.del,"cnvnator",depth)
 lumpy.del.analysis<-scores(lumpy.del,sim.del,"lumpy",depth)
 pindel.del.analysis<-scores(pindel.del,sim.del,"pindel",depth)
-#breakdancer.del.analysis<-scores(breakdancer.del,sim.del,"breakdancer",depth)
+svaba.del.analysis<-scores(svaba.del,sim.del,"svaba",depth)
 
-if (dim(cnv.del.analysis)[2]!=0){
-  final <- rbind(cnv.del.analysis)
-}
-
-if (dim(pindel.del.analysis)[2]!=0){
-  final <- rbind(final,pindel.del.analysis)
-}
-
-if (dim(lumpy.del.analysis)[2]!=0){
-  final <- rbind(final,lumpy.del.analysis)
-}   
-
-#if (dim(breakdancer.del.analysis)[2]!=0){
-#  final <- rbind(final,breakdancer.del.analysis)
-#}  
+# rbind only if variables have data
+if (dim(cnv.del.analysis)[2]!=0){final <- rbind(cnv.del.analysis)}
+if (dim(pindel.del.analysis)[2]!=0){final <- rbind(final,pindel.del.analysis)}
+if (dim(lumpy.del.analysis)[2]!=0){final <- rbind(final,lumpy.del.analysis)}   
+if (dim(svaba.del.analysis)[2]!=0){final <- rbind(final,svaba.del.analysis)}
 
 rownames(final)<-c()
 final <- as.data.frame(final)
-
 final
-
 write.csv(final, file = paste0(depth,type,".xls"))
 ```
 
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+# tabulate if an algorithm/tools detected a CNV
 
-
-```{r Voting,warning=FALSE,message=FALSE,echo=FALSE}
+# converting to GRange object (This step could be skipped)
 pindel.GR <- gRange.object(pindel.del)
 cnv.GR <- gRange.object(cnv.del)
 lumpy.GR <- gRange.object(lumpy.del)
-#breakdancer.GR <- gRange.object(breakdancer.del)
+svaba.GR <- gRange.object(svaba.del)
 sim.GR <- gRange.object(sim.del)
 
-#length(pindel.GR)
-#length(cnv.GR)
-#length(lumpy.GR)
-#length(sim.GR)
-#length(breakdancer.GR)
-
+# capture result for each algorithm/tool
 pindel.vote <- sapply(countOverlaps(sim.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 cnv.vote <- sapply(countOverlaps(sim.GR,cnv.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 lumpy.vote <- sapply(countOverlaps(sim.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
-#breakdancer.vote <- sapply(countOverlaps(sim.GR,breakdancer.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+svaba.vote <- sapply(countOverlaps(sim.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 
+# initialize to summarize 
+votes <- NULL
 votes <- as.data.frame(cbind(type,sim.del$sim, sim.del$chrom.1,sim.del$start,sim.del$end,
-                              as.numeric(sim.del$end)-as.numeric(sim.del$start)))
+                             as.numeric(sim.del$end)-as.numeric(sim.del$start)))
 colnames(votes) <- c("type","sim","chrom","start","end","size")
 
 votes$pindel <- 0
 votes$cnvnator <- 0
 votes$lumpy <- 0
-#votes$breakdancer <- 0
+votes$svaba <- 0
 
-if (length(pindel.vote)>1){
-  votes$pindel <- pindel.vote
-} else {
-  votes$pindel <- 0
-}
-           
-#head(votes)
-                
-if (length(cnv.vote)>1){
-  votes$cnvnator <- cnv.vote
-} else {
-  votes$cnvnator <- 0
-}
-
-#head(votes)
-
-if (length(lumpy.vote)>1){
-  votes$lumpy <- lumpy.vote
-} else {
-  votes$lumpy  <- 0
-}
-
-#head(votes)
-
-#if (length(breakdancer.vote)>1){
-#  votes$breakdancer <- breakdancer.vote
-#} else {
-#  votes$breakdancer <- 0
-#}
+if (length(pindel.vote)>1){votes$pindel <- pindel.vote} else {votes$pindel <- 0}
+if (length(cnv.vote)>1){votes$cnvnator <- cnv.vote} else {votes$cnvnator <- 0}
+if (length(lumpy.vote)>1){votes$lumpy <- lumpy.vote} else {votes$lumpy  <- 0}
+if (length(svaba.vote)>1){votes$svaba <- svaba.vote} else {votes$svaba <- 0}
 
 votes$pindel <- as.numeric(votes$pindel)
 votes$lumpy <- as.numeric(votes$lumpy)
 votes$cnvnator <- as.numeric(votes$cnvnator)
-#votes$breakdancer <- as.numeric(votes$breakdancer)
+votes$svaba <- as.numeric(votes$svaba)
 
 votes$pindel[votes$pindel==1] <- 0
 votes$cnvnator[votes$cnvnator==1] <- 0
 votes$lumpy[votes$lumpy==1] <- 0
-#votes$breakdancer[votes$breakdancer==1] <- 0
+votes$svaba[votes$svaba==1] <- 0
 
 votes$pindel[votes$pindel==2] <- 1
 votes$cnvnator[votes$cnvnator==2] <- 1
 votes$lumpy[votes$lumpy==2] <- 1
-#votes$breakdancer[votes$breakdancer==2] <- 1
+votes$svaba[votes$svaba==2] <- 1
 
-votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy)
-
-#votes <- votes[(order(votes$call,decreasing=TRUE)),]
-
-(votes)
-
+votes$call <- (votes$pindel + votes$cnvnator + votes$lumpy + votes$svaba)
+votes <- votes[(order(votes$call,decreasing=TRUE)),]
+MAIN.DF.1 <- data.frame()
+MAIN.DF.1 <- subset(votes,select=c(pindel,cnvnator,lumpy,svaba))
+MAIN.DF.1$truth <- 1
 write.csv(votes, file = paste0(depth,type,"_vote",".xls"))
 ```
-
-
