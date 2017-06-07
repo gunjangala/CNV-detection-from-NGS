@@ -160,6 +160,7 @@ specific.region <- function (data,chr,start,end){
 }
 ```
 
+## SvABA output
 ```{r}
 if (file.info(svabaFILE)$size > 30){
   print ("SvABA NON_EMPTY")
@@ -209,9 +210,7 @@ kable(svaba.chr.4.8.11, caption = "SvABA output for HXT6/7, DUR3 and GAP1 region
 
 ```
 
-
-
-
+## LUMPY output
 ```{r}
 if (file.info(lumpyFILE)$size > 30){
   print ("LUMPY NON_EMPTY")
@@ -260,8 +259,7 @@ kable(lumpy.chr.4.8.11, caption = "Lumpy output for HXT6/7, DUR3 and GAP1 region
 
 ```
 
-
-
+## Pindel output
 ```{r}
 
 if (file.info(pindelFILE)$size > 30){
