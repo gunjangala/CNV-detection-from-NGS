@@ -1,5 +1,4 @@
 # The following commands should be executed after SBATCH script has finished running
-
 grep "" sa*/*short*|grep -v "AL" >summary.xls
 grep "" sa*/*svaba_chr4.xls > svaba_chr4_ALL.xls
 grep "" sa*/*svaba_chr8.xls > svaba_chr8_ALL.xls
@@ -10,4 +9,3 @@ grep "" sa*/*pindel_chr11.xls > pindel_chr11_ALL.xls
 grep "" sa*/*lumpy_chr4.xls > lumpy_chr4_ALL.xls
 grep "" sa*/*lumpy_chr8.xls > lumpy_chr8_ALL.xls
 grep "" sa*/*lumpy_chr11.xls > lumpy_chr11_ALL.xls
-
