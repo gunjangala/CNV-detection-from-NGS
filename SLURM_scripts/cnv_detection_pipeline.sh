@@ -1,40 +1,59 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=20
 #SBATCH --time=10:00:00
 #SBATCH --mem=30GB
-#SBATCH --job-name=all
+#SBATCH --job-name=jun5ALL
 #SBATCH --mail-user=ggg256@nyu.edu
-#SBATCH -o /scratch/cgsb/gresham/Gunjan/oe/slurm-%A_%a.out
-#SBATCH -e /scratch/cgsb/gresham/Gunjan/oe/slurm-%A_%a.err
-#SBATCH --array=10-40
+#SBATCH -o /scratch/cgsb/gresham/Gunjan/population_samples_5Jun2017/oe/slurm-%A_%a.out
+#SBATCH -e /scratch/cgsb/gresham/Gunjan/population_samples_5Jun2017/oe/slurm-%A_%a.err
+#SBATCH --array=1-9
 
-#############################################################################
-PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
+################## Defining variables ###############################
+
+ARRAY_NUMBER=0${SLURM_ARRAY_TASK_ID}
+DATA_DIR=/scratch/cgsb/gencore/out/Gresham/2017-05-24_HKFYTBGX2/merged
 ref="/scratch/work/cgsb/reference_genomes/In_house/Fungi/Saccharomyces_cerevisiae/UCSC_sacCer3_GAP1/sacCer3.fa"
-RUNDIR="/scratch/cgsb/gresham/Gunjan/GC_sample_analysis"
-sample="sample"
-ID=${sample}_${SLURM_ARRAY_TASK_ID}
+RUNDIR="/scratch/cgsb/gresham/Gunjan/population_samples_5Jun2017"
+ID=sample_${ARRAY_NUMBER}
+
+bases_trim_5prime_Read1=8
+bases_trim_5prime_Read2=8
+# bases_trim_3prime_Read1=0
+# bases_trim_3prime_Read2=0
+minimum_read_length=50
+
+PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
 
 cd $RUNDIR
 mkdir ${ID}
 cd ${ID}
 
-cp /scratch/cgsb/gencore/out/Gresham/2016-10-26_HG7CVAFXX/merged/HG7CVAFXX_n01_mini02_${SLURM_ARRAY_TASK_ID}.fastq.gz .
-cp /scratch/cgsb/gencore/out/Gresham/2016-10-26_HG7CVAFXX/merged/HG7CVAFXX_n02_mini02_${SLURM_ARRAY_TASK_ID}.fastq.gz .
-gunzip *n01*
-gunzip *n02*
+fastq1=${DATA_DIR}/HKFYTBGX2_n01_mini02_partii_${ARRAY_NUMBER}.fastq.gz
+fastq2=${DATA_DIR}/HKFYTBGX2_n02_mini02_partii_${ARRAY_NUMBER}.fastq.gz
 
-fastq1=HG7CVAFXX_n01_mini02_${SLURM_ARRAY_TASK_ID}.fastq
-fastq2=HG7CVAFXX_n02_mini02_${SLURM_ARRAY_TASK_ID}.fastq
+ module purge
+module load trim_galore
+module load cutadapt/intel/1.12
 
-# fastqc analysis
+trim_galore --fastqc --length ${minimum_read_length} \
+--trim-n \
+--clip_R1 ${bases_trim_5prime_Read1} \
+--clip_R2 ${bases_trim_5prime_Read2} \
+-o $PWD \
+--paired \
+${fastq1} \
+${fastq2}
+# --three_prime_clip_R1 ${bases_trim_3prime_Read1} \
+# --three_prime_clip_R2 ${bases_trim_3prime_Read2} \
+
 module purge
-module load fastqc
+module load fastqc 
+fastq1=*val_1.fq.gz
+fastq2=*val_2.fq.gz
 fastqc $fastq1
 fastqc $fastq2
-
 
 ######################### Alignment & Metrics  ###########################
 
@@ -42,7 +61,7 @@ fastqc $fastq2
 module purge
 module load bwa/intel/0.7.15 
 module load samtools/intel/1.3.1
-bwa mem -t 16 $ref $fastq1 $fastq2 > tmp_${ID}.bam
+bwa mem -t 20 $ref $fastq1 $fastq2 > tmp_${ID}.bam
 samtools sort tmp_${ID}.bam > tmp_${ID}.sorted.bam
 samtools index tmp_${ID}.sorted.bam
 
@@ -57,56 +76,46 @@ correctGCBias -b ${RUNDIR}/${ID}/tmp_${ID}.sorted.bam --effectiveGenomeSize 1210
 -g /scratch/cgsb/gresham/Gunjan/sacCer3.2bit \
 --GCbiasFrequenciesFile ${ID}_GC.txt -o ${ID}.sorted.bam
 
+# indexed file created in the above step
+
+# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
+bam=${ID}.sorted.bam
+
 # obtaining alignment metrics using Picards tools
 module purge
 module load picard 
 java -jar $PICARD_JAR \
 CollectAlignmentSummaryMetrics \
 R=$ref \
-I=${ID}.sorted.bam \
-O=${ID}_alignment_metrics.txt 
+I=${bam} \
+O=alignment_metrics.txt 
+
+grep -v '^#' alignment_metrics.txt | cut -f1-12 | sed '/^\s*$/d' > ${ID}_alignment_metrics.txt
+
 
 # obtaining insert size metrics using Picards tools
 java -jar $PICARD_JAR \
 CollectInsertSizeMetrics \
-INPUT=${ID}.sorted.bam  \
-OUTPUT=${ID}_insert_metrics.txt \
-HISTOGRAM_FILE=${ID}_insert_size_histogram.pdf 
+INPUT=${bam}  \
+OUTPUT=insert_metrics.txt \
+HISTOGRAM_FILE=${ID}_insert_size_histogram.pdf
+
+head -n 9 insert_metrics.txt | grep -v '^#' | cut -f1-19|sed '/^\s*$/d' >${ID}_insert_size_metrics.txt
 
 # obtaining read depth ie coverage using samtools
 module load samtools/intel/1.3.1
-samtools depth -a ${ID}.sorted.bam > ${ID}_RD.txt
-
-# removing duplicates from the sorted bam file and building index using picard
-java -jar $PICARD_JAR \
-MarkDuplicates \
-INPUT=${ID}.sorted.bam  \
-OUTPUT=${ID}.rm.dup.bam \
-METRICS_FILE=${ID}.rmdup.metrics.txt \
-REMOVE_DUPLICATES=true
-
-java -jar $PICARD_JAR \
-BuildBamIndex \
-INPUT=${ID}.rm.dup.bam
-
-# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
-bam1=${ID}.rm.dup.bam
-bam=${ID}.sorted.bam
+samtools depth -a ${bam} > ${ID}_RD.txt
 
 ###################################################
 
 # obtain config file for pindel
-module purge
-module load breakdancer/intel/1.4.5
-/share/apps/breakdancer/1.4.5/intel/perl/bam2cfg.pl $bam -h > ${ID}_bd.cfg
-mean_insert_size="$(less ${ID}_bd.cfg | cut -f9)"
-mean_IS="$echo `expr substr $mean_insert_size 6 8`" 
+mean_IS=$(sed -n '2p' < ${ID}_insert_size_metrics.txt | cut -f 5) 
 echo "${bam} ${mean_IS} ${ID}" > config_${ID}.txt
 
 module purge
 module load pindel/intel/20170402
 /share/apps/pindel/20170402/intel/bin/pindel \
--T 16 \
+-T 20 \
 -f $ref \
 -i config_${ID}.txt \
 -c ALL \
@@ -122,6 +131,10 @@ python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_TD >> ${ID
 
 pindel2vcf -p ${ID}_output_D -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DEL_pindel.vcf
 pindel2vcf -p ${ID}_output_TD -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DUP_pindel.vcf
+
+module purge
+module load vcftools/intel/0.1.14
+vcf-concat ${ID}_DEL_pindel.vcf ${ID}_DUP_pindel.vcf > ${ID}_pindel.vcf
 
 echo "pindel done"
 
@@ -146,35 +159,35 @@ module load cnvnator/intel/0.3.3
 cnvnator \
 -root ${ID}_out.root \
 -genome $ref \
--tree $bam1 \
+-tree $bam \
 -unique 
 
 # generating histogram
 cnvnator \
 -root ${ID}_out.root \
 -genome $ref \
--tree $bam1 \
+-tree $bam \
 -his ${bin_size} \
 
 # stats
 cnvnator \
 -root ${ID}_out.root \
 -genome $ref \
--tree $bam1 \
+-tree $bam \
 -stat ${bin_size}
 
 # partition
 cnvnator \
 -root ${ID}_out.root \
 -genome $ref \
--tree $bam1 \
+-tree $bam \
 -partition ${bin_size}
 
 # cnv calling
 cnvnator \
 -root ${ID}_out.root \
 -genome $ref \
--tree $bam1 \
+-tree $bam \
 -call ${bin_size} > ${ID}_cnvnator.txt
 
 module load python3/intel/3.5.3 
@@ -223,61 +236,41 @@ python /home/ggg256/scripts/parse_lumpy.py \
 echo "lumpy done"
 
 ###########################
-mkdir SvABA
-cd SvABA
+
 module purge
 module load svaba/intel/0.2.1 
-svaba run -p 16 -G $ref -t ../$bam1
-gunzip -c no_id.alignments.txt.gz | grep contig_name > ${ID}_plot.txt
+svaba run -p 20 -G $ref -t $bam
 cp no_id.svaba.sv.vcf ${ID}_svaba.vcf
+
+###########################
 
 module load annovar/20160201
 annotate_variation.pl -downdb ensGene -buildver sacCer3 sacCer3/
 annotate_variation.pl --buildver sacCer3 --downdb seq sacCer3/sacCer3_seq
 retrieve_seq_from_fasta.pl sacCer3/sacCer3_ensGene.txt -seqdir sacCer3/sacCer3_seq -format ensGene -outfile sacCer3/sacCer3_ensGeneMrna.fa
-table_annovar.pl ${ID}_svaba.vcf sacCer3/ --buildver sacCer3 -protocol ensGene -operation g -vcfinput
-cd ${RUNDIR}/${ID}
 
-##########################
+table_annovar.pl ${ID}_svaba.vcf sacCer3/ --buildver sacCer3 -protocol ensGene -operation g -vcfinput
+table_annovar.pl ${ID}_lumpy.vcf sacCer3/ --buildver sacCer3 -protocol ensGene -operation g -vcfinput
+table_annovar.pl ${ID}_pindel.vcf sacCer3/ --buildver sacCer3 -protocol ensGene -operation g -vcfinput
+
+less ${ID}_svaba*multianno.vcf | grep -v "#" > ${ID}_SvABA_annotated.vcf
+less ${ID}_lumpy*multianno.vcf | grep -v "#" > ${ID}_lumpy_annotated.vcf
+less ${ID}_pindel*multianno.vcf | grep -v "#" > ${ID}_pindel_annotated.vcf
+
+######################################################################################
 module purge
 module load r/intel/3.3.2
-module load rstudio
-mkdir cnv_plots_${ID}
-cd cnv_plots_${ID}
-
-cp /home/ggg256/scripts/analyzing_for_CNVs.Rmd .
-
-Rscript -e "library(knitr); knit('analyzing_for_CNVs.Rmd')" \
--p ../${ID}_pindel.txt \
--c ../${ID}_cnv.txt \
--l ../${ID}_lumpy.txt \
--r ../${ID}_RD.txt
-
-mv cnv.xls ${ID}_cnv.xls
-
+module load pandoc/gnu/1.17.0.3
+cp /home/ggg256/scripts/genome_wide_analysis.Rmd .
+Rscript -e "rmarkdown::render('genome_wide_analysis.Rmd')" ${ID}_lumpy_annotated.vcf ${ID}_pindel_annotated.vcf ${ID}_SvABA_annotated.vcf ${ID}_insert_size_metrics.txt ${ID}_alignment_metrics.txt ${ID}_RD.txt ${ID}
+mv genome_wide_analysis.html ${ID}_genome_wide_analysis.html
 ######################################################################################
-cd ${RUNDIR}/${ID}
-mkdir chr_plots_${ID}
-cd chr_plots_${ID}
 
-cp /home/ggg256/scripts/plot_RD_whole_chr_justSample_UCSC.Rmd .
-Rscript -e "library(knitr); knit('plot_RD_whole_chr_justSample_UCSC.Rmd')" \
--r ../${ID}_RD.txt \
--s ${ID}
+# removing files to save space
+ls *bam| grep -v sample_06.sorted.bam | xargs rm
+ls *bam| grep -v sample_06.sorted.bam.bai | xargs rm
+rm tmp_sample_06.sorted*
 
-######################################################################################
-cd ${RUNDIR}/${ID}
-# VOTING :
-cp /home/ggg256/scripts/lab_data_voting.Rmd .
 
-Rscript -e "library(knitr); knit('lab_data_voting.Rmd')" \
--p ${ID}_pindel.txt \
--c ${ID}_cnv.txt \
--l ${ID}_lumpy.txt \
--s ${ID}
 
-mv lab_data_voting.md ${ID}_voting.md
-
-######################################################################################
-echo "ALL DONE"
 
