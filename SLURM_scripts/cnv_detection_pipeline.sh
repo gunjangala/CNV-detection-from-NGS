@@ -189,9 +189,10 @@ less ${ID}_pindel*multianno.vcf | grep -v "#" > ${ID}_pindel_annotated.vcf
 module purge
 module load r/intel/3.3.2
 module load pandoc/gnu/1.17.0.3
-cp /home/ggg256/scripts/CNVreport.Rmd .
+cp $RUNDIR/CNVreport.Rmd .
 Rscript -e "rmarkdown::render('CNVreport.Rmd')" ${ID}_lumpy_annotated.vcf ${ID}_pindel_annotated.vcf ${ID}_SvABA_annotated.vcf ${ID}_insert_size_metrics.txt ${ID}_alignment_metrics.txt ${ID}_RD.txt ${ID}
 mv CNVreport.html ${ID}_CNVreport.html
+rm *.Rmd
 
 ################################################################
 ################## REMOVE FILES TO SAVE SPACE ##################
