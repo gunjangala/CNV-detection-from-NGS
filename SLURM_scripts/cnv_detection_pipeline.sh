@@ -124,14 +124,6 @@ module load pindel/intel/20170402
 -c ALL \
 -o ${ID}_output
 
-module load python3/intel/3.5.3 
-# parsing files and obtaining necessary data in separate .txt file to be read in by R
-python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_D > ${ID}_pindel.txt
-python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_TD >> ${ID}_pindel.txt
-# parse pindel's output to obtain breakpoints 
-python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_D > ${ID}_pindel_novelseq.txt
-python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_TD >> ${ID}_pindel_novelseq.txt
-
 pindel2vcf -p ${ID}_output_D -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DEL_pindel.vcf
 pindel2vcf -p ${ID}_output_TD -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DUP_pindel.vcf
 
@@ -140,67 +132,6 @@ module load vcftools/intel/0.1.14
 vcf-concat ${ID}_DEL_pindel.vcf ${ID}_DUP_pindel.vcf > ${ID}_pindel.vcf
 
 echo "pindel done"
-
-############ run CNVnator ###############
-
-# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
-module load r/intel/3.3.2
-Rscript /home/ggg256/scripts/read_depth_for_bin_size.R \
--r ${ID}_RD.txt \
-> ${ID}_readDepth.txt
-bin_size="$(cat ${ID}_readDepth.txt|replace \" ""|replace [1] "" )"
-
-# obtaining individual fasta files from reference file in the "same directory"
-# this step is very important for cnvnator to work
-# also check for reference file
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/GAP1_fasta_to_each_chr.py 
-
-module purge
-module load cnvnator/intel/0.3.3
-# predicting CNV regions
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--unique 
-
-# generating histogram
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--his ${bin_size} \
-
-# stats
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--stat ${bin_size}
-
-# partition
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--partition ${bin_size}
-
-# cnv calling
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--call ${bin_size} > ${ID}_cnvnator.txt
-
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t deletion > ${ID}_cnv.txt
-python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t duplication >> ${ID}_cnv.txt
-
-# deleting the individual fasta files to save space
-rm c*fa
-
-echo "cnvnator done"
 
 ############ run Lumpy ###############
 
@@ -231,12 +162,6 @@ lumpyexpress \
 -S splitters.sorted.bam \
 -D discordants.sorted.bam \
 -o ${ID}_lumpy.vcf
-
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/parse_lumpy.py \
--f ${ID}_lumpy.vcf \
-> ${ID}_lumpy.txt
-echo "lumpy done"
 
 ############ run SvABA ###############
 
@@ -281,4 +206,3 @@ rm tmp*
 
 echo "ALL DONE"
 echo $(date)
-
