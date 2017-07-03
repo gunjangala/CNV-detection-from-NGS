@@ -20,7 +20,8 @@ bases_trim_5prime_Read2=14
 bases_trim_3prime_Read1=2
 bases_trim_3prime_Read2=2
 minimum_read_length=50
-ID=sample_${ARRAY_NUMBER}
+
+if [ ${ARRAY_NUMBER} -lt 10 ]; then ID=sample_0${ARRAY_NUMBER}; else ID=sample_${ARRAY_NUMBER}; fi
 
 PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
 
