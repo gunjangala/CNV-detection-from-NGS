@@ -1,42 +1,37 @@
 ---
-title: "CNV detection and Genome-wide analysis report"
 author: "Gunjan Sethia and David Gresham"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
-output: 
-  html_document: 
+output:
+  html_document:
     fig_caption: yes
     toc: yes
+    collapsed: true
+    theme: spacelab
+    highlight: zenburn
+    code_folding: hide
 ---
 
 ```{r,warning=FALSE,message=FALSE,results='hide'}
+library(rmarkdown)
 library(splitstackshape)
 library(ggplot2)
 library(tidyverse)
-library(knitr)
 library(readr)
 library(optparse)
+library(qdapRegex)
+library(GenomicRanges)
+library(knitr)
+
 ```
 
+# Summary: Read depth, Alignment rate and Insert size metrics
 
-```{r,eval=FALSE}
-setwd("~/Desktop/pipeline_folder")
-
-svaba <- read.table("sample_023_svaba_annotated.vcf",sep="\t")
-lumpy <- read.table("sample_023_lumpy_annotated.vcf",sep="\t")
-pindel <- read.table("sample_023_pindel_annotated.vcf",sep="\t")
-IS.file <- read.csv("sample_023_insert_size_metrics.txt",sep="\t")
-AL.file <- read.csv("sample_023_alignment_metrics.txt",sep="\t")
-rd <- read_tsv("sample_023_RD.txt", col_names = FALSE)
-sample.name <- "test"
-```
-
-
-```{r}
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
 args = commandArgs(trailingOnly=TRUE)
 if (length(args)==0) {
   stop("At least one argument must be supplied (input file).n", call.=FALSE)
 } else if (length(args)>1) {
-  lumpyFILE=args[1] 
+  lumpyFILE=args[1]
   pindelFILE=args[2]
   svabaFILE=args[3]
   insertSizeFILE=args[4]
@@ -44,52 +39,82 @@ if (length(args)==0) {
   readDepthFILE=args[6]
   sampleNAME=args[7]
 }
+opts_chunk$set(cache=TRUE, cache.path = paste0(sampleNAME,'_files/'), fig.path='figure/')
+IS <- round(t(read.csv(insertSizeFILE,sep="\t")[,c(5,6,1:4)]),2)
+colnames(IS) <- c("Value")
+kable(IS,caption = "Insert size metrics")
 
-sample.name <- sampleNAME
-IS.file <- read.csv(insertSizeFILE,sep="\t")
-AL.file <- read.csv(alignmentStatsFILE,sep="\t")
+AL <- t(read.csv(alignmentStatsFILE,sep="\t"))
+colnames(AL) <- c("","","")
+kable(AL,caption = "Alignment rate metrics")
+
+```
+---
+title: `r sampleNAME`
+---
+
+```{r,warning=FALSE,message=FALSE}
 rd <- read_tsv(readDepthFILE, col_names = FALSE)
-
-IS <- IS.file[1,5]
-AL <- AL.file[3,7]
 names(rd) <- c("chromosome", "coordinate", "depth")
+rd <- rd[rd$chromosome!="chrM",]
+rd.summary <- data.frame(summary(rd)[c(4,1,6,3),3])
+colnames(rd.summary)<-c("")
+kable(rd.summary,caption = "Read depth summary")
 mean_depth <- mean(rd$depth)
-summary <- as.data.frame(cbind(AL,IS,mean_depth))
-write.csv(summary,file=paste0(sample.name,"_short_summary.xls"),row.names = FALSE,col.names = FALSE)
+rd$chromosome <- as.numeric(as.roman(gsub("chr", "", rd$chromosome)))
 ```
 
-## Generate per chromosome summary statistics
+# Relative copy number
 
 ```{r}
+relative.copy.number.rDNA <- mean((rd$depth[rd$chromosome=="12" & rd$coordinate>=451000 & rd$coordinate<=470000])/mean_depth)
+relative.copy.number.GAP1 <- mean((rd$depth[rd$chromosome=="11" & rd$coordinate>=515063 & rd$coordinate<=516871])/mean_depth)
+relative.copy.number.DUR3 <- mean((rd$depth[rd$chromosome=="8" & rd$coordinate>=72037 & rd$coordinate<=74244])/mean_depth)
+relative.copy.number.HXT <- mean((rd$depth[rd$chromosome=="4" & rd$coordinate>=1154216 & rd$coordinate<=1161320])/mean_depth)
+# removing rDNA locus and an amplification besides rDNA locus
+rd$depth[rd$chromosome==12 & rd$coordinate >= 451000 & rd$coordinate <= 500000] <-  mean_depth
+gene <- c("HXT6/7","DUR3","GAP1","rDNA")
+value <- round(c(relative.copy.number.HXT,relative.copy.number.DUR3,relative.copy.number.GAP1,relative.copy.number.rDNA),2)
+rel.copy.number <- data.frame(cbind(gene,value),stringsAsFactors = F)
+kable(rel.copy.number,caption = "Relative copy number")
+```
+
+# Per chromosome summary statistics
+
+```{r,message=FALSE,warning=FALSE}
 kable(summarise(group_by(rd,chromosome), mean = mean(depth), sd = sd(depth), median = median(depth), lower.quantile = quantile(depth)[2], upper.quantile = quantile(depth)[4], max.depth = max(depth)), caption = "Read depth summary per chromosome")
 ```
 
+# Plots:
+
 ## Barplots of per chromosome read depth
 
-```{r,fig.height=7, fig.width=7}
-ggplot(rd, aes(x= chromosome, y = depth, fill = chromosome)) + 
-        stat_summary(fun.y = "mean", geom = "bar") + 
-        ggtitle("Average read depth")
+```{r,fig.height=7, fig.width=7,message=FALSE,warning=FALSE}
+
+rd$chromosome <- as.factor(rd$chromosome)
+ggplot(rd, aes(x= chromosome, y = depth, fill = chromosome)) +
+        stat_summary(fun.y = "mean", geom = "bar") +
+        ggtitle("Average read depth") 
 ```
 
-```{r,fig.height=7, fig.width=7}
-ggplot(rd, aes(x= chromosome, y = depth, fill = chromosome)) + 
-        stat_summary(fun.y = "median", geom = "bar") + 
+```{r,fig.height=7, fig.width=7,message=FALSE,warning=FALSE}
+ggplot(rd, aes(x= chromosome, y = depth, fill = chromosome)) +
+        stat_summary(fun.y = "median", geom = "bar") +
         ggtitle("Median read depth")
 ```
 
 ## Histograms of read depth distribution
 
-```{r, fig.height=7, fig.width=7}
+```{r, fig.height=7, fig.width=7,message=FALSE,warning=FALSE}
 ggplot(rd, aes(x = depth)) +
         geom_histogram(binwidth = 0.1) +
         scale_x_log10() +
-        geom_vline(xintercept=mean_depth) + 
-        annotate("text", x = 1000, y = 15000, label= mean_depth)
+        geom_vline(xintercept=mean_depth) +
+        annotate("text", x = 5, y = 1600000, label= paste0("Mean read depth=",round(mean_depth,2)))+
+        ggtitle("Mean read depth")
 ```
 
-
-```{r, fig.height=10, fig.width=10}
+```{r, fig.height=10, fig.width=10,message=FALSE,warning=FALSE}
 ggplot(rd, aes(x = depth)) +
         geom_histogram(binwidth = 0.1) +
         scale_x_log10() +
@@ -98,15 +123,15 @@ ggplot(rd, aes(x = depth)) +
 
 ## Chromosome read depth plots
 
-```{r, fig.height=10, fig.width=10}
+```{r, fig.height=10, fig.width=10,message=FALSE,warning=FALSE}
 ggplot(rd, aes(x = coordinate, y = depth, col = chromosome)) +
         geom_line() +
         facet_grid(chromosome ~ ., scale = "free")
 ```
 
-## Chromosome normalized read depth plots 
+## Chromosome normalized read depth plots
 
-```{r, fig.height=10, fig.width=10}
+```{r, fig.height=10, fig.width=10,message=FALSE,warning=FALSE}
 ggplot(rd, aes(x = coordinate, y = depth/mean_depth, col = chromosome)) +
         geom_line() +
         facet_grid(chromosome ~ ., scale = "free")
@@ -119,36 +144,30 @@ This function will plot a zoom of the region of interest normalized by genome-wi
 plot_region <- function(chr, start, stop) {
   rd %>% filter(chromosome == chr, coordinate >= start & coordinate <= stop)  %>%
     ggplot(., aes(x = coordinate, y = depth/mean_depth)) +
-        geom_point(alpha = 1/10, col=2, size = 0.1) + 
-                geom_smooth() + 
+        geom_point(alpha = 1/10, col=2, size = 0.1) +
+                geom_smooth() +
                 ggtitle(paste(chr,": ",start," - ",stop, sep=""))
 }
 ```
 
-
-### Chromosome IV region of interest: 
-
-```{r, fig.height=7, fig.width=7}
-plot_region("chrIV", 1140000, 1170000)
-```
-
-### Chromosome VIII region of interest: 
+### Chromosome IV - HXT6/7 :
 
 ```{r, fig.height=7, fig.width=7}
-plot_region("chrVIII", 5000, 120000)
+plot_region("4", 1140000, 1170000)
 ```
 
-### Chromosome XI region of interest
+### Chromosome VIII - DUR3 :
 
 ```{r, fig.height=7, fig.width=7}
-plot_region("chrXI", 470000, 665000)
+plot_region("8", 5000, 120000)
 ```
 
-### Chromosome XII region of interest 
+### Chromosome XI - GAP1 :
 
 ```{r, fig.height=7, fig.width=7}
-plot_region("chrXII", 400000, 500000)
+plot_region("11", 400000, 665000)
 ```
+
 
 ```{r}
 specific.region <- function (data,chr,start,end){
@@ -160,72 +179,63 @@ specific.region <- function (data,chr,start,end){
 }
 ```
 
-## SvABA output
-```{r}
+# CNV calls:
+
+```{r,warning=FALSE,message=FALSE}
 if (file.info(svabaFILE)$size > 30){
-  print ("SvABA NON_EMPTY")
   svaba <- read.table(svabaFILE,sep="\t")
-  
+  svaba <- svaba[svaba$V1!="chrM",]
+
   diff <- NULL
   diff.1 <- NULL
   final <- NULL
   diff <- (cSplit(svaba, "V8", ";"))
   diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
   final <- diff.1[,c(1:7,11,12,19,20,22:26,10,13:18,21,27,8,9)]
-  
-    colnames(final) <- c("chromosome","position","ID","REF","ALT",
+
+  colnames(final) <- c("chromosome","position","ID","REF","ALT",
                  "QUAL","FILTER","Evidence","Imprecise/homseq",
                  "SVLEN","SVTYPE","Function","Gene.name","Gene.detail","ExonicFunction","AAchange",
                  "DISC_MAPQ","MAPQ","MATEID","MATENM","NM","NUMPARTS","SCTG","ANNOVAR.DATE","info.1","info.2","info.3")
 
   final[,c(8,10,11,12,13,14,15,16,17,18,19,20,21,22,24)] <- apply(final[,c(8,10,11,12,13,14,15,16,17,18,19,20,21,22,24)],2, function(x){gsub(".*=","",x)})
-  
+
   svaba <- as.data.frame(final, stringsAsFactors = FALSE)
 
-  print (dim(svaba))
   svaba <- svaba[as.numeric(svaba$SVLEN)>=50 & as.numeric(svaba$QUAL)>=10 & as.numeric(svaba$DISC_MAPQ)>=10 & as.numeric(svaba$MAPQ)>=10 ,]
-  print (dim(svaba))
+  svaba <- svaba[complete.cases(svaba),]
   head(svaba)
-  
+
   svaba.chr4 <- specific.region(svaba,"chrIV",1140000, 1170000)
   svaba.chr8 <- specific.region(svaba,"chrVIII", 5000, 120000)
-  svaba.chr11 <- specific.region(svaba,"chrXI",450000,650000)
+  svaba.chr11 <- specific.region(svaba,"chrXI",400000,650000)
 
-  write.csv(svaba,file=paste0(sample.name,"_svaba.xls"), row.names = FALSE)
-  write.csv(svaba.chr4,file=paste0(sample.name,"_svaba_chr4.xls"), row.names = FALSE)
-  write.csv(svaba.chr8,file=paste0(sample.name,"_svaba_chr8.xls"), row.names = FALSE)
-  write.csv(svaba.chr11,file=paste0(sample.name,"_svaba_chr11.xls"), row.names = FALSE)
-  
+  write.csv(svaba,file=paste0(sampleNAME,"_svaba.xls"), row.names = FALSE)
+
 } else {
   print ("svaba Empty")
-  empty <- as.data.frame(t(rep("0",23)))
-  write.csv(empty,file=paste0(sample.name,"_svaba.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_svaba_chr4.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_svaba_chr8.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_svaba_chr11.xls"), row.names = FALSE,col.names = FALSE)
 }
 
 svaba.chr.4.8.11 <- as.data.frame(rbind(svaba.chr4,svaba.chr8,svaba.chr11))
-kable(svaba.chr.4.8.11, caption = "SvABA output for HXT6/7, DUR3 and GAP1 regions")
+#kable(svaba.chr.4.8.11, caption = "SvABA output for HXT6/7, DUR3 and GAP1 regions")
 
 ```
 
-## LUMPY output
-```{r}
+```{r,warning=FALSE,message=FALSE}
 if (file.info(lumpyFILE)$size > 30){
-  print ("LUMPY NON_EMPTY")
-  
   lumpy <- read.table(lumpyFILE,sep="\t")
+  lumpy <- lumpy[lumpy$V1!="chrM",]
+
   diff <- NULL
   final <- NULL
   diff.1 <- NULL
   diff <- (cSplit(lumpy, "V8", ";"))
   diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
-  
+
   final <- diff.1[,c(1:7,10:13,18,23:27,19:21,8,9,14:17,22,28)]
-  
+
   colnames(final) <- c("chromosome","position","ID","REF","ALT",
-                     "SVTYPE","STRANDS","SVTYPE","STRANDS","SVLEN",
+                     "","STRANDS","SVTYPE","STRANDS","SVLEN",
                      "END","imprecise/homseq","Function","gene.name","gene.detail",
                      "exonic.function","AAChange","SU","PE","SR",
                      "info.1","info.2","CIPOS","CIEND","CIPOS95","CIEND95",
@@ -233,48 +243,47 @@ if (file.info(lumpyFILE)$size > 30){
 
   final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] <- apply(final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] ,2, function(x){gsub(".*=","",x)})
 
-  lumpy <- as.data.frame(final, stringsAsFactors = FALSE) 
-  
+  lumpy <- as.data.frame(final, stringsAsFactors = FALSE)
+  lumpy.NO.BND <-  lumpy[lumpy$SVTYPE!="BND",]
+  lumpy.BND <- lumpy[lumpy$SVTYPE=="BND",]
+  lumpy.BND$END <-unlist(rm_between(lumpy.BND$ALT, ":", "[", extract=TRUE))
+  lumpy.BND <- lumpy.BND[complete.cases(lumpy.BND),]
+  lumpy <- rbind(lumpy.BND,lumpy.NO.BND)
+  lumpy$SVLEN <- abs(as.numeric(lumpy$END)-as.numeric(lumpy$position))
+  lumpy <- lumpy[complete.cases(lumpy),]
+
   dim(lumpy)
   lumpy.chr4 <- lumpy[lumpy$chromosome=="chrIV",]
   lumpy.chr8 <- lumpy[lumpy$chromosome=="chrVIII",]
   lumpy.chr11 <- lumpy[lumpy$chromosome=="chrXI",]
 
-  write.csv(lumpy,file=paste0(sample.name,"_lumpy.xls"), row.names = FALSE)
-  write.csv(lumpy.chr4,file=paste0(sample.name,"_lumpy_chr4.xls"), row.names = FALSE)
-  write.csv(lumpy.chr8,file=paste0(sample.name,"_lumpy_chr8.xls"), row.names = FALSE)
-  write.csv(lumpy.chr11,file=paste0(sample.name,"_lumpy_chr11.xls"), row.names = FALSE)
-
+  write.csv(lumpy,file=paste0(sampleNAME,"_lumpy.xls"), row.names = FALSE)
 } else {
   print ("LUMPY Empty")
-  empty <- as.data.frame(t(rep("0",24)))
-  write.csv(empty,file=paste0(sample.name,"_lumpy.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_lumpy_chr4.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_lumpy_chr8.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_lumpy_chr11.xls"), row.names = FALSE,col.names = FALSE)
+
 }
 
 lumpy.chr.4.8.11 <- as.data.frame(rbind(lumpy.chr4,lumpy.chr8,lumpy.chr11))
-kable(lumpy.chr.4.8.11, caption = "Lumpy output for HXT6/7, DUR3 and GAP1 regions")
+#kable(lumpy.chr.4.8.11, caption = "Lumpy output for HXT6/7, DUR3 and GAP1 regions")
 
 ```
 
-## Pindel output
-```{r}
+```{r,warning=FALSE,message=FALSE}
 
 if (file.info(pindelFILE)$size > 30){
-  print ("PINDEL NON_EMPTY")
+
   pindel <- read.table(pindelFILE,sep="\t")
-  
+  pindel <- pindel[pindel$V1!="chrM",]
+
   diff <- NULL
   diff.1 <- NULL
   final <- NULL
   diff <- (cSplit(pindel, "V8", ";"))
-  
+
   diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
-  
+
   final <- diff.1[,c(1:7,10:14,16:20,8:9,15,21)]
-  
+
   colnames(final) <- c("chromosome","position","ID","REF","ALT",
                        "QUAL","FILTER","END","HOMLEN","HOMSEQ",
                        "SVLEN","SVTYPE","Function","Gene.name","Gene.detail",
@@ -282,34 +291,138 @@ if (file.info(pindelFILE)$size > 30){
 
   final[,c(8:17,21)] <- apply(final[,c(8:17,20)] ,2, function(x){gsub(".*=","",x)})
 
-  pindel <- as.data.frame(final, stringsAsFactors = FALSE) 
-  
+  pindel <- as.data.frame(final, stringsAsFactors = FALSE)
+
   pindel$SVLEN <- as.integer(pindel$END)-as.integer(pindel$position)
   dim(pindel)
   pindel <- pindel[pindel$SVLEN>=50,]
   dim(pindel)
-  
+  pindel <- pindel[complete.cases(pindel),]
+
   pindel.chr4 <- specific.region(pindel,"chrIV",1140000, 1170000)
   pindel.chr8 <- specific.region(pindel,"chrVIII", 5000, 120000)
-  pindel.chr11 <- specific.region(pindel,"chrXI",450000,650000)
+  pindel.chr11 <- specific.region(pindel,"chrXI",400000,650000)
 
-  write.csv(pindel,file=paste0(sample.name,"_pindel.xls"), row.names = FALSE)
-  write.csv(pindel.chr4,file=paste0(sample.name,"_pindel_chr4.xls"), row.names = FALSE)
-  write.csv(pindel.chr8,file=paste0(sample.name,"_pindel_chr8.xls"), row.names = FALSE)
-  write.csv(pindel.chr11,file=paste0(sample.name,"_pindel_chr11.xls"), row.names = FALSE)
+  write.csv(pindel,file=paste0(sampleNAME,"_pindel.xls"), row.names = FALSE)
 
 } else {
   print ("Pindel Empty")
-  empty <- as.data.frame(t(rep("0",21)))
-  write.csv(empty,file=paste0(sample.name,"_pindel.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_pindel_chr4.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_pindel_chr8.xls"), row.names = FALSE,col.names = FALSE)
-  write.csv(empty,file=paste0(sample.name,"_pindel_chr11.xls"), row.names = FALSE,col.names = FALSE)
+
 }
 
 pindel.chr.4.8.11 <- as.data.frame(rbind(pindel.chr4,pindel.chr8,pindel.chr11))
-kable(pindel.chr.4.8.11, caption = "pindel output for HXT6/7, DUR3 and GAP1 regions")
+#kable(pindel.chr.4.8.11, caption = "pindel output for HXT6/7, DUR3 and GAP1 regions")
 
 ```
 
+```{r,warning=FALSE,message=FALSE}
 
+merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN)),
+                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN)),
+                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN))))
+colnames(merged) <- c("chromosome","position","SVLEN")
+merged$chromosome <- as.character(merged$chromosome)
+merged$position <- as.integer(as.character(merged$position))
+merged$SVLEN <- as.integer(as.character(merged$SVLEN))
+
+gRange.object <- function (object){
+  object$chromosome <- as.character(object$chromosome)
+  object$position <- as.integer(object$position)
+  object$SVLEN <- as.integer(object$SVLEN)
+  chr <- object$chromosome
+  start <- (object$position)
+  len <- abs(object$SVLEN)
+  end <- start+len
+  gR <- GRanges(seqnames = chr, ranges = IRanges(start=start, end=end))
+  return (gR)
+}
+
+pindel.GR <- gRange.object(pindel)
+lumpy.GR <- gRange.object(lumpy)
+svaba.GR <- gRange.object(svaba)
+merged.GR <- gRange.object(merged)
+
+pindel.vote <- sapply(countOverlaps(merged.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+lumpy.vote <- sapply(countOverlaps(merged.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+svaba.vote <- sapply(countOverlaps(merged.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+
+votes <- NULL
+votes <- as.data.frame(cbind(as.character(merged$chromosome),as.integer(merged$position),(as.integer(merged$position)+as.integer(merged$SVLEN)),merged$SVLEN),stringsAsFactors=FALSE)
+colnames(votes) <- c("chromosome","start","end","length")
+votes$chromosome <- as.character(votes$chromosome)
+votes$start <- as.integer(as.character(votes$start))
+votes$end <- as.integer(as.character(votes$end))
+votes$length <- as.integer(as.character(votes$length))
+
+votes$pindel <-(pindel.vote)
+votes$lumpy <-(lumpy.vote)
+votes$svaba <-(svaba.vote)
+
+votes$pindel <- 0
+votes$lumpy <-
+votes$svaba <- 0
+
+if (length(pindel.vote)>1){votes$pindel <- pindel.vote} else {votes$pindel <- 0}
+if (length(lumpy.vote)>1){votes$lumpy <- lumpy.vote} else {votes$lumpy  <- 0}
+if (length(svaba.vote)>1){votes$svaba <- svaba.vote} else {votes$svaba <- 0}
+
+votes$pindel <- as.numeric(votes$pindel)
+votes$lumpy <- as.numeric(votes$lumpy)
+votes$svaba <- as.numeric(votes$svaba)
+
+votes$pindel[votes$pindel==1] <- 0
+votes$lumpy[votes$lumpy==1] <-
+votes$svaba[votes$svaba==1] <- 0
+
+votes$pindel[votes$pindel==2] <- 1
+votes$lumpy[votes$lumpy==2] <-
+votes$svaba[votes$svaba==2] <- 1
+
+votes$total.votes <- (votes$pindel + votes$lumpy + votes$svaba)
+votes <- votes[(order(votes$total.votes,decreasing=TRUE)),]
+
+CNV.call.3 <- votes[votes$total.votes==3,]
+CNV.call.3 <- CNV.call.3 [order(CNV.call.3$chromosome,CNV.call.3$start),]
+CNV.call.2 <- votes[votes$total.votes==2,]
+CNV.call.2 <- CNV.call.2 [order(CNV.call.2$chromosome,CNV.call.2$start),]
+CNV.call.1 <- votes[votes$total.votes==1,]
+CNV.call.1 <- CNV.call.1 [order(CNV.call.1$chromosome,CNV.call.1$start),]
+```
+
+## High confidence CNVs ie CNVs detected by all 3 algorithms
+
+```{r}
+kable(CNV.call.3,caption = "High confidence CNVs" )
+```
+
+## CNVs detected by atleast 2 algorithms
+
+```{r}
+kable(CNV.call.2,caption = "CNVs detected by atleast 2 algorithms" )
+```
+
+## CNVs detected by only 1 algorithm
+
+```{r}
+kable(CNV.call.1,caption = "CNVs detected by only 1 algorithm" )
+```
+
+## Pindel output
+```{r}
+kable(pindel,caption = "Pindel output")
+```
+
+## SvABA output
+```{r}
+kable(svaba,caption = "SvABA output")
+```
+
+## Lumpy output
+```{r}
+kable(lumpy,caption = "Lumpy output")
+```
+
+# sessionInfo()
+```{r}
+sessionInfo()
+```
