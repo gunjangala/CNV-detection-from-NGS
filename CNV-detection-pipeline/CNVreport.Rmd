@@ -21,7 +21,21 @@ library(optparse)
 library(qdapRegex)
 library(GenomicRanges)
 library(knitr)
+library(dplyr)
 
+```
+
+
+```{r,eval=FALSE}
+setwd("~/Google Drive/pipeline_folder/")
+
+svaba <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_svaba_annotated.vcf",sep="\t")
+lumpy <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_lumpy_annotated.vcf",sep="\t")
+pindel <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_pindel_annotated.vcf",sep="\t")
+IS.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_insert_size_metrics.txt",sep="\t")
+AL.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_alignment_metrics.txt",sep="\t")
+rd <- read_tsv("sample_023_RD.txt", col_names = FALSE)
+sample.name <- "test"
 ```
 
 # Summary: Read depth, Alignment rate and Insert size metrics
@@ -317,13 +331,16 @@ pindel.chr.4.8.11 <- as.data.frame(rbind(pindel.chr4,pindel.chr8,pindel.chr11))
 
 ```{r,warning=FALSE,message=FALSE}
 
-merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN)),
-                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN)),
-                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN))))
-colnames(merged) <- c("chromosome","position","SVLEN")
+merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE),
+                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE),
+                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))
+colnames(merged) <- c("chromosome","position","SVLEN","SVTYPE")
 merged$chromosome <- as.character(merged$chromosome)
 merged$position <- as.integer(as.character(merged$position))
 merged$SVLEN <- as.integer(as.character(merged$SVLEN))
+merged$SVTYPE <- as.character(merged$SVTYPE)
+merged$SVTYPE[which(!is.na(as.Date(as.character(merged$SVTYPE),format="%Y-%m-%d")))] <- ""
+merged$SVTYPE[which(!is.na(as.numeric(merged$SVTYPE)))] <- "" 
 
 gRange.object <- function (object){
   object$chromosome <- as.character(object$chromosome)
@@ -347,19 +364,20 @@ lumpy.vote <- sapply(countOverlaps(merged.GR,lumpy.GR, type = "any"), function(x
 svaba.vote <- sapply(countOverlaps(merged.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
 
 votes <- NULL
-votes <- as.data.frame(cbind(as.character(merged$chromosome),as.integer(merged$position),(as.integer(merged$position)+as.integer(merged$SVLEN)),merged$SVLEN),stringsAsFactors=FALSE)
-colnames(votes) <- c("chromosome","start","end","length")
+votes <- as.data.frame(cbind(as.character(merged$chromosome),as.integer(merged$position),(as.integer(merged$position)+as.integer(merged$SVLEN)),merged$SVLEN,merged$SVTYPE),stringsAsFactors=FALSE)
+colnames(votes) <- c("chromosome","start","end","length","type")
 votes$chromosome <- as.character(votes$chromosome)
 votes$start <- as.integer(as.character(votes$start))
 votes$end <- as.integer(as.character(votes$end))
 votes$length <- as.integer(as.character(votes$length))
+votes$type <- as.character(votes$type)
 
 votes$pindel <-(pindel.vote)
 votes$lumpy <-(lumpy.vote)
 votes$svaba <-(svaba.vote)
 
 votes$pindel <- 0
-votes$lumpy <-
+votes$lumpy <- 0
 votes$svaba <- 0
 
 if (length(pindel.vote)>1){votes$pindel <- pindel.vote} else {votes$pindel <- 0}
@@ -371,22 +389,22 @@ votes$lumpy <- as.numeric(votes$lumpy)
 votes$svaba <- as.numeric(votes$svaba)
 
 votes$pindel[votes$pindel==1] <- 0
-votes$lumpy[votes$lumpy==1] <-
+votes$lumpy[votes$lumpy==1] <- 0
 votes$svaba[votes$svaba==1] <- 0
 
 votes$pindel[votes$pindel==2] <- 1
-votes$lumpy[votes$lumpy==2] <-
+votes$lumpy[votes$lumpy==2] <- 1
 votes$svaba[votes$svaba==2] <- 1
 
 votes$total.votes <- (votes$pindel + votes$lumpy + votes$svaba)
 votes <- votes[(order(votes$total.votes,decreasing=TRUE)),]
 
 CNV.call.3 <- votes[votes$total.votes==3,]
-CNV.call.3 <- CNV.call.3 [order(CNV.call.3$chromosome,CNV.call.3$start),]
+CNV.call.3 <- arrange(CNV.call.3, chromosome, start)
 CNV.call.2 <- votes[votes$total.votes==2,]
-CNV.call.2 <- CNV.call.2 [order(CNV.call.2$chromosome,CNV.call.2$start),]
+CNV.call.2 <- arrange(CNV.call.2, chromosome, start)
 CNV.call.1 <- votes[votes$total.votes==1,]
-CNV.call.1 <- CNV.call.1 [order(CNV.call.1$chromosome,CNV.call.1$start),]
+CNV.call.1 <- arrange(CNV.call.1, chromosome, start)
 ```
 
 ## High confidence CNVs ie CNVs detected by all 3 algorithms

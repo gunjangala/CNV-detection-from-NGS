@@ -1,30 +1,47 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=15
 #SBATCH --time=10:00:00
-#SBATCH --mem=20GB
-#SBATCH --array=1-9
+#SBATCH --mem=40GB
+#SBATCH --array=8-12
 
-################## Defining variables ###############################
 echo $(date)
-ARRAY_NUMBER=0${SLURM_ARRAY_TASK_ID}
-DATA_DIR=/scratch/cgsb/gencore/out/Gresham/2017-05-24_HKFYTBGX2/merged
-ref="/scratch/work/cgsb/reference_genomes/In_house/Fungi/Saccharomyces_cerevisiae/UCSC_sacCer3_GAP1/sacCer3.fa"
-RUNDIR=$1
-#RUNDIR="/scratch/cgsb/gresham/Gunjan/population_samples_5Jun2017"
-fastq1=${DATA_DIR}/HKFYTBGX2_n01_mini02_partii_${ARRAY_NUMBER}.fastq.gz
-fastq2=${DATA_DIR}/HKFYTBGX2_n02_mini02_partii_${ARRAY_NUMBER}.fastq.gz
-bases_trim_5prime_Read1=14
-bases_trim_5prime_Read2=14
-bases_trim_3prime_Read1=2
-bases_trim_3prime_Read2=2
+################## Defining variables ###############################
+
+#######  input variables from command line   #######
+ref=$1
+DATA_DIR=$2
+bases_trim_5prime_Read1=$3
+bases_trim_5prime_Read2=$4
+bases_trim_3prime_Read1=$5
+bases_trim_3prime_Read2=$6
+RUNDIR=$7
+
+echo ${bases_trim_5prime_Read1}
+echo $3
+
+
+## in case one want to hard-code these variables:
+# ref=/scratch/work/cgsb/reference_genomes/In_house/Fungi/Saccharomyces_cerevisiae/UCSC_sacCer3_GAP1/sacCer3.fa
+# DATA_DIR=/scratch/cgsb/gencore/out/Gresham/2017-05-24_HKFYTBGX2/merged
+# bases_trim_5prime_Read1=14
+# bases_trim_5prime_Read2=14
+# bases_trim_3prime_Read1=2
+# bases_trim_3prime_Read2=2
+
+
+####### other hard-coded variables  #######
+if [ ${SLURM_ARRAY_TASK_ID} -lt 10 ]; then taskID=0${SLURM_ARRAY_TASK_ID}; else taskID=${SLURM_ARRAY_TASK_ID}; fi
+ID=sample_${taskID}
+fastq1=${DATA_DIR}/HKFYTBGX2_n01_mini02_partii_${taskID}.fastq.gz
+fastq2=${DATA_DIR}/HKFYTBGX2_n02_mini02_partii_${taskID}.fastq.gz
+ID=sample_${taskID}
 minimum_read_length=50
-
-if [ ${ARRAY_NUMBER} -lt 10 ]; then ID=sample_0${ARRAY_NUMBER}; else ID=sample_${ARRAY_NUMBER}; fi
-
+RUNDIR="$PWD"
 PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
 
+############ moving in current working directory ###########
 cd $RUNDIR
 mkdir ${ID}
 cd ${ID}
@@ -49,7 +66,7 @@ ${fastq2}
 # --three_prime_clip_R2 ${bases_trim_3prime_Read2} \
 
 module purge
-module load fastqc 
+module load fastqc
 fastq1=*val_1.fq.gz
 fastq2=*val_2.fq.gz
 fastqc $fastq1
@@ -59,22 +76,22 @@ fastqc $fastq2
 
 # performing bwa mem algorithm, sorting,indexing using samtools
 module purge
-module load bwa/intel/0.7.15 
+module load bwa/intel/0.7.15
 module load samtools/intel/1.3.1
-bwa mem -t 20 $ref $fastq1 $fastq2 > tmp_${ID}.bam
-samtools sort tmp_${ID}.bam > tmp_${ID}.sorted.bam
-samtools index tmp_${ID}.sorted.bam
+bwa mem -t 20 $ref $fastq1 $fastq2 > ${ID}.bam
+samtools sort ${ID}.bam > ${ID}.sorted.bam
+samtools index ${ID}.sorted.bam
 
 ########### Alignment & insert size metrics #############
-bam=tmp_${ID}.sorted.bam
+bam=${ID}.sorted.bam
 # obtaining alignment metrics using Picards tools
 module purge
-module load picard 
+module load picard
 java -jar $PICARD_JAR \
 CollectAlignmentSummaryMetrics \
 R=$ref \
 I=${bam} \
-O=alignment_metrics.txt 
+O=alignment_metrics.txt
 
 grep -v '^#' alignment_metrics.txt | cut -f1-12 | sed '/^\s*$/d' > ${ID}_alignment_metrics.txt
 
@@ -87,23 +104,6 @@ HISTOGRAM_FILE=${ID}_insert_size_histogram.pdf
 
 head -n 9 insert_metrics.txt | grep -v '^#' | cut -f1-19|sed '/^\s*$/d' >${ID}_insert_size_metrics.txt
 
-############### GC Correction ####################
-
-module purge
-module load deeptools/intel/2.4.2
-
-computeGCBias -b ${RUNDIR}/${ID}/tmp_${ID}.sorted.bam --effectiveGenomeSize 12100000 \
--g /scratch/cgsb/gresham/Gunjan/sacCer3.2bit \
--l 300 -freq ${ID}_GC.txt
-
-correctGCBias -b ${RUNDIR}/${ID}/tmp_${ID}.sorted.bam --effectiveGenomeSize 12100000 \
--g /scratch/cgsb/gresham/Gunjan/sacCer3.2bit \
---GCbiasFrequenciesFile ${ID}_GC.txt -o ${ID}.sorted.bam
-
-# index file created in the above step
-# assigning to bam(variable) the sorted bam file to be used as input while running algortihms 
-bam=${ID}.sorted.bam
-
 ############### read depth file ###################
 
 # obtaining read depth ie coverage using samtools
@@ -113,7 +113,7 @@ samtools depth -a ${bam} > ${ID}_RD.txt
 ############ run Pindel ###############
 
 # obtain config file for pindel
-mean_IS=$(sed -n '2p' < ${ID}_insert_size_metrics.txt | cut -f 5) 
+mean_IS=$(sed -n '2p' < ${ID}_insert_size_metrics.txt | cut -f 5)
 echo "${bam} ${mean_IS} ${ID}" > config_${ID}.txt
 
 module purge
@@ -125,14 +125,6 @@ module load pindel/intel/20170402
 -c ALL \
 -o ${ID}_output
 
-module load python3/intel/3.5.3 
-# parsing files and obtaining necessary data in separate .txt file to be read in by R
-python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_D > ${ID}_pindel.txt
-python /home/ggg256/scripts/parse_pindel_D_INV_TD_SI.py -f ${ID}_output_TD >> ${ID}_pindel.txt
-# parse pindel's output to obtain breakpoints 
-python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_D > ${ID}_pindel_novelseq.txt
-python /home/ggg256/scripts/parse_pindel_novel_seq.py -f ${ID}_output_TD >> ${ID}_pindel_novelseq.txt
-
 pindel2vcf -p ${ID}_output_D -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DEL_pindel.vcf
 pindel2vcf -p ${ID}_output_TD -r $ref -R UCSC_SacCer -d Feb2017 -v ${ID}_DUP_pindel.vcf
 
@@ -141,67 +133,6 @@ module load vcftools/intel/0.1.14
 vcf-concat ${ID}_DEL_pindel.vcf ${ID}_DUP_pindel.vcf > ${ID}_pindel.vcf
 
 echo "pindel done"
-
-############ run CNVnator ###############
-
-# obtaining read depth ie coverage to decide bin size while running cnvnator algorithm
-module load r/intel/3.3.2
-Rscript /home/ggg256/scripts/read_depth_for_bin_size.R \
--r ${ID}_RD.txt \
-> ${ID}_readDepth.txt
-bin_size="$(cat ${ID}_readDepth.txt|replace \" ""|replace [1] "" )"
-
-# obtaining individual fasta files from reference file in the "same directory"
-# this step is very important for cnvnator to work
-# also check for reference file
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/GAP1_fasta_to_each_chr.py 
-
-module purge
-module load cnvnator/intel/0.3.3
-# predicting CNV regions
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--unique 
-
-# generating histogram
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--his ${bin_size} \
-
-# stats
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--stat ${bin_size}
-
-# partition
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--partition ${bin_size}
-
-# cnv calling
-cnvnator \
--root ${ID}_out.root \
--genome $ref \
--tree $bam \
--call ${bin_size} > ${ID}_cnvnator.txt
-
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t deletion > ${ID}_cnv.txt
-python /home/ggg256/scripts/parse_cnvnator.py -f ${ID}_cnvnator.txt -t duplication >> ${ID}_cnv.txt
-
-# deleting the individual fasta files to save space
-rm c*fa
-
-echo "cnvnator done"
 
 ############ run Lumpy ###############
 
@@ -226,23 +157,17 @@ samtools index discordants.sorted.bam
 echo "lumpy sorting and indexing done"
 
 module purge
-module load lumpy/intel/20170331 
+module load lumpy/intel/20170331
 lumpyexpress \
 -B lumpy.sorted.bam \
 -S splitters.sorted.bam \
 -D discordants.sorted.bam \
 -o ${ID}_lumpy.vcf
 
-module load python3/intel/3.5.3 
-python /home/ggg256/scripts/parse_lumpy.py \
--f ${ID}_lumpy.vcf \
-> ${ID}_lumpy.txt
-echo "lumpy done"
-
 ############ run SvABA ###############
 
 module purge
-module load svaba/intel/0.2.1 
+module load svaba/intel/0.2.1
 svaba run -p 20 -G $ref -t $bam
 cp no_id.svaba.sv.vcf ${ID}_svaba.vcf
 
@@ -264,8 +189,8 @@ less ${ID}_pindel*multianno.vcf | grep -v "#" > ${ID}_pindel_annotated.vcf
 ############ CNV summary and genome-wide analysis report ###############
 module purge
 module load r/intel/3.3.2
-module load pandoc/gnu/1.17.0.3
-cp /home/ggg256/scripts/CNVreport.Rmd .
+module load pandoc/gnu/1.19.2
+cp ${RUNDIR}/CNVreport.Rmd .
 Rscript -e "rmarkdown::render('CNVreport.Rmd')" ${ID}_lumpy_annotated.vcf ${ID}_pindel_annotated.vcf ${ID}_SvABA_annotated.vcf ${ID}_insert_size_metrics.txt ${ID}_alignment_metrics.txt ${ID}_RD.txt ${ID}
 mv CNVreport.html ${ID}_CNVreport.html
 
@@ -275,11 +200,9 @@ mv CNVreport.html ${ID}_CNVreport.html
 
 # removing files to save space
 ls *bam| grep -v ${ID}.sorted.bam | xargs rm
-ls *bam| grep -v ${ID}.sorted.bam.bai | xargs rm
-rm tmp*
+ls *bai| grep -v ${ID}.sorted.bam.bai | xargs rm
 
 ############################################################
 
 echo "ALL DONE"
 echo $(date)
-
