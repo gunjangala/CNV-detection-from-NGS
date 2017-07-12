@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=15
+#SBATCH --cpus-per-task=20
 #SBATCH --time=10:00:00
-#SBATCH --mem=40GB
-#SBATCH --array=8-12
+#SBATCH --mem=50GB
 
 echo $(date)
 ################## Defining variables ###############################
@@ -17,29 +16,18 @@ bases_trim_5prime_Read2=$4
 bases_trim_3prime_Read1=$5
 bases_trim_3prime_Read2=$6
 RUNDIR=$7
-
-echo ${bases_trim_5prime_Read1}
-echo $3
-
-
-## in case one want to hard-code these variables:
-# ref=/scratch/work/cgsb/reference_genomes/In_house/Fungi/Saccharomyces_cerevisiae/UCSC_sacCer3_GAP1/sacCer3.fa
-# DATA_DIR=/scratch/cgsb/gencore/out/Gresham/2017-05-24_HKFYTBGX2/merged
-# bases_trim_5prime_Read1=14
-# bases_trim_5prime_Read2=14
-# bases_trim_3prime_Read1=2
-# bases_trim_3prime_Read2=2
-
+file1=$8
+file2=$9
 
 ####### other hard-coded variables  #######
 if [ ${SLURM_ARRAY_TASK_ID} -lt 10 ]; then taskID=0${SLURM_ARRAY_TASK_ID}; else taskID=${SLURM_ARRAY_TASK_ID}; fi
 ID=sample_${taskID}
-fastq1=${DATA_DIR}/HKFYTBGX2_n01_mini02_partii_${taskID}.fastq.gz
-fastq2=${DATA_DIR}/HKFYTBGX2_n02_mini02_partii_${taskID}.fastq.gz
+PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
+RUNDIR="$PWD"
+fastq1=${DATA_DIR}/${file1}${taskID}.fastq.gz
+fastq2=${DATA_DIR}/${file2}${taskID}.fastq.gz
 ID=sample_${taskID}
 minimum_read_length=50
-RUNDIR="$PWD"
-PICARD_JAR='java -jar /share/apps/picard/2.8.2/picard-2.8.2.jar'
 
 ############ moving in current working directory ###########
 cd $RUNDIR
@@ -62,8 +50,6 @@ trim_galore --fastqc --length ${minimum_read_length} \
 --paired \
 ${fastq1} \
 ${fastq2}
-# --three_prime_clip_R1 ${bases_trim_3prime_Read1} \
-# --three_prime_clip_R2 ${bases_trim_3prime_Read2} \
 
 module purge
 module load fastqc
