@@ -60,7 +60,7 @@ FASTQ_PE_2="HKFYTBGX2_n02_mini02_partii_"
 
 - ```CNVreport.Rmd``` : This Rmarkdown file does all downstream analysis. It generates a HTML output for each sample processed.
 
-- ```consolidate_all_samples_results.sh``` : Run this as follows if you want to look at CNV output chromosome-wise for each tool used. This step is **not** mandatory/required.
+- ```consolidate_all_samples_results.sh``` : Run this as follows if you want to look at CNV output chromosome-wise (so far adapted for just chr4,8 and 11) for each tool used. This step is **not** mandatory/required.
 ``` 
 cd <name of project directory>
 sh consolidate_all_samples_results.sh
