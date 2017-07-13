@@ -75,7 +75,7 @@ mkdir <name of project directory>
 cd <name of project directory>
 ```
 
-Download the code from GitHub.
+Run the following code on HPC Prince to download the pipeline. Run the following code to get started.
 ```
 git clone https://github.com/gunjangala/CNV-detection-from-NGS
 cp CNV-detection-from-NGS/pipeline/* .
