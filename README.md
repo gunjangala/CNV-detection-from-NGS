@@ -89,7 +89,7 @@ sh run_SBATCH.sh
 
 Check for successful submission and running of jobs as follows:
 ```
-watch squeue -u <your net ID>
+squeue -u <your net ID>
 ``` 
 To understand what going on, refer [this](https://wikis.nyu.edu/display/NYUHPC/Slurm+Tutorial) website and go to ```Check job status``` tab.
 
@@ -104,7 +104,7 @@ cp sample*/*_CNVreport.html HTML_OUTPUTS/.
 ```HTML_OUTPUTS``` will now contain output HTML files for all samples processed.
 
 ### O/E logs:
-All the ERROR and OUTPUT logs for the run could be found in ```<name of project directory>/oe``` directory
+All the ERROR and OUTPUT logs for running a pipeline could be found in ```<name of project directory>/oe``` directory
 Eg.
 
     - error log file: ALL_1372744_10.err
