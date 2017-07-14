@@ -28,7 +28,8 @@ To run this pipeline, we require:
 
 ### Files description:
 
-  - ```run_SBATCH.sh``` : This is a wrapper script. Here, one should change the following parameters before executing the script:
+  - ```run_SBATCH.sh``` : 
+  This is a wrapper script. Here, one should change the following parameters before executing the script:
     - job name
     - Path to reference directory
     - Path to directory containing paired-end FASTQ files
