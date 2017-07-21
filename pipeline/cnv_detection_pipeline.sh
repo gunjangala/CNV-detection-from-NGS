@@ -72,7 +72,7 @@ samtools index ${ID}.sorted.bam
 bam=${ID}.sorted.bam
 # obtaining alignment metrics using Picards tools
 module purge
-module load picard
+module load picard/2.8.2
 java -jar $PICARD_JAR \
 CollectAlignmentSummaryMetrics \
 R=$ref \
