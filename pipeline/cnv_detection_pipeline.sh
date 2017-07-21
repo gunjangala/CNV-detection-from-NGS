@@ -37,7 +37,7 @@ cd ${ID}
 ################ Data pre-processing ###################
 
 module purge
-module load trim_galore
+module load trim_galore/0.4.4
 module load cutadapt/intel/1.12
 
 trim_galore --fastqc --length ${minimum_read_length} \
@@ -52,7 +52,7 @@ ${fastq1} \
 ${fastq2}
 
 module purge
-module load fastqc
+module load fastqc/0.11.5
 fastq1=*val_1.fq.gz
 fastq2=*val_2.fq.gz
 fastqc $fastq1
