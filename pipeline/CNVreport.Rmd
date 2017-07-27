@@ -82,7 +82,8 @@ rd$chromosome <- as.numeric(as.roman(gsub("chr", "", rd$chromosome)))
 
 ```{r}
 relative.copy.number.rDNA <- mean((rd$depth[rd$chromosome=="12" & rd$coordinate>=451000 & rd$coordinate<=470000])/mean_depth)
-relative.copy.number.GAP1 <- mean((rd$depth[rd$chromosome=="11" & rd$coordinate>=515063 & rd$coordinate<=516871])/mean_depth)
+# coordinates for GAP1 are modified to adjust for GFP 
+relative.copy.number.GAP1 <- mean((rd$depth[rd$chromosome=="11" & rd$coordinate>=518438 & rd$coordinate<=520246])/mean_depth)
 relative.copy.number.DUR3 <- mean((rd$depth[rd$chromosome=="8" & rd$coordinate>=72037 & rd$coordinate<=74244])/mean_depth)
 relative.copy.number.HXT <- mean((rd$depth[rd$chromosome=="4" & rd$coordinate>=1154216 & rd$coordinate<=1161320])/mean_depth)
 # removing rDNA locus and an amplification besides rDNA locus
