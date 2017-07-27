@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=20
 #SBATCH --time=10:00:00
-#SBATCH --mem=50GB
+#SBATCH --mem=70GB
 
 echo $(date)
 ################## Defining variables ###############################
