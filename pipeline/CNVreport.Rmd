@@ -1,3 +1,4 @@
+
 ---
 author: "Gunjan Sethia and David Gresham"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
@@ -23,19 +24,6 @@ library(GenomicRanges)
 library(knitr)
 library(dplyr)
 
-```
-
-
-```{r,eval=FALSE}
-setwd("~/Google Drive/pipeline_folder/")
-
-svaba <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_svaba_annotated.vcf",sep="\t")
-lumpy <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_lumpy_annotated.vcf",sep="\t")
-pindel <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_pindel_annotated.vcf",sep="\t")
-IS.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_insert_size_metrics.txt",sep="\t")
-AL.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_alignment_metrics.txt",sep="\t")
-rd <- read_tsv("sample_023_RD.txt", col_names = FALSE)
-sample.name <- "test"
 ```
 
 # Summary: Read depth, Alignment rate and Insert size metrics
@@ -199,32 +187,31 @@ specific.region <- function (data,chr,start,end){
 if (file.info(svabaFILE)$size > 30){
   svaba <- read.table(svabaFILE,sep="\t")
   svaba <- svaba[svaba$V1!="chrM",]
-
   if (dim(svaba)[1]!=0){
-      diff <- NULL
+    diff <- NULL
     diff.1 <- NULL
     final <- NULL
     diff <- (cSplit(svaba, "V8", ";"))
     diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
+    # if there is just one CNV called by algorithm, variable is a "list"
+    # which interferes with further steps. Following "if" block of code prevents the error
+    diff.1 <- as.data.frame(diff.1, stringsAsFactors = FALSE)
+    if (nrow(diff.1)==28 & ncol(diff.1)<5){
+      diff.1 <- data.frame(t(diff.1))
+    }
     final <- diff.1[,c(1:7,11,12,19,20,22:26,10,13:18,21,27,8,9)]
-
     colnames(final) <- c("chromosome","position","ID","REF","ALT",
                  "QUAL","FILTER","Evidence","Imprecise/homseq",
                  "SVLEN","SVTYPE","Function","Gene.name","Gene.detail","ExonicFunction","AAchange",
                  "DISC_MAPQ","MAPQ","MATEID","MATENM","NM","NUMPARTS","SCTG","ANNOVAR.DATE","info.1","info.2","info.3")
-
     final[,c(8,10,11,12,13,14,15,16,17,18,19,20,21,22,24)] <- apply(final[,c(8,10,11,12,13,14,15,16,17,18,19,20,21,22,24)],2, function(x){gsub(".*=","",x)})
-
     svaba <- as.data.frame(final, stringsAsFactors = FALSE)
-
     svaba <- svaba[as.numeric(svaba$SVLEN)>=50 & as.numeric(svaba$QUAL)>=10 & as.numeric(svaba$DISC_MAPQ)>=10 & as.numeric(svaba$MAPQ)>=10 ,]
     svaba <- svaba[complete.cases(svaba),]
     head(svaba)
-
     svaba.chr4 <- specific.region(svaba,"chrIV",1140000, 1170000)
     svaba.chr8 <- specific.region(svaba,"chrVIII", 5000, 120000)
     svaba.chr11 <- specific.region(svaba,"chrXI",400000,650000)
-
     write.csv(svaba,file=paste0(sampleNAME,"_svaba.xls"), row.names = FALSE)
   } else {
     print ("svaba variable Empty")
@@ -236,32 +223,32 @@ if (file.info(svabaFILE)$size > 30){
 
 #svaba.chr.4.8.11 <- as.data.frame(rbind(svaba.chr4,svaba.chr8,svaba.chr11))
 #kable(svaba.chr.4.8.11, caption = "SvABA output for HXT6/7, DUR3 and GAP1 regions")
-
 ```
 
 ```{r,warning=FALSE,message=FALSE}
 if (file.info(lumpyFILE)$size > 30){
   lumpy <- read.table(lumpyFILE,sep="\t")
   lumpy <- lumpy[lumpy$V1!="chrM",]
-
   if (dim(lumpy)[1]!=0){
-     diff <- NULL
+    diff <- NULL
     final <- NULL
     diff.1 <- NULL
     diff <- (cSplit(lumpy, "V8", ";"))
     diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
-
+    # if there is just one CNV called by algorithm, variable is a "list"
+    # which interferes with further steps. Following "if" block of code prevents the error
+    diff.1 <- as.data.frame(diff.1, stringsAsFactors = FALSE)
+    if (nrow(diff.1)==28 & ncol(diff.1)<5){
+      diff.1 <- data.frame(t(diff.1))
+    }
     final <- diff.1[,c(1:7,10:13,18,23:27,19:21,8,9,14:17,22,28)]
-
     colnames(final) <- c("chromosome","position","ID","REF","ALT",
                      "","STRANDS","SVTYPE","STRANDS","SVLEN",
                      "END","imprecise/homseq","Function","gene.name","gene.detail",
                      "exonic.function","AAChange","SU","PE","SR",
                      "info.1","info.2","CIPOS","CIEND","CIPOS95","CIEND95",
                      "ANNOVAR.DATE","info.3")
-
     final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] <- apply(final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] ,2, function(x){gsub(".*=","",x)})
-
     lumpy <- as.data.frame(final, stringsAsFactors = FALSE)
     lumpy.NO.BND <-  lumpy[lumpy$SVTYPE!="BND",]
     lumpy.BND <- lumpy[lumpy$SVTYPE=="BND",]
@@ -270,20 +257,16 @@ if (file.info(lumpyFILE)$size > 30){
     lumpy <- rbind(lumpy.BND,lumpy.NO.BND)
     lumpy$SVLEN <- abs(as.numeric(lumpy$END)-as.numeric(lumpy$position))
     lumpy <- lumpy[complete.cases(lumpy),]
-
     dim(lumpy)
     lumpy.chr4 <- lumpy[lumpy$chromosome=="chrIV",]
     lumpy.chr8 <- lumpy[lumpy$chromosome=="chrVIII",]
     lumpy.chr11 <- lumpy[lumpy$chromosome=="chrXI",]
-
     write.csv(lumpy,file=paste0(sampleNAME,"_lumpy.xls"), row.names = FALSE)
   } else {
     print ("LUMPY variable Empty")
   }
- 
 } else {
   print ("LUMPY file Empty")
-
 }
 
 #lumpy.chr.4.8.11 <- as.data.frame(rbind(lumpy.chr4,lumpy.chr8,lumpy.chr11))
@@ -292,56 +275,48 @@ if (file.info(lumpyFILE)$size > 30){
 ```
 
 ```{r,warning=FALSE,message=FALSE}
-
 if (file.info(pindelFILE)$size > 30){
 
   pindel <- read.table(pindelFILE,sep="\t")
   pindel <- pindel[pindel$V1!="chrM",]
 
   if (dim(pindel)[1]!=0){
-
     diff <- NULL
     diff.1 <- NULL
     final <- NULL
     diff <- (cSplit(pindel, "V8", ";"))
-
     diff.1 <- apply(as.data.frame(diff),2, function(x){as.character(x)})
-
+    # if there is just one CNV called by algorithm, variable is a "list"
+    # which interferes with further steps. Following "if" block of code prevents the error
+    diff.1 <- as.data.frame(diff.1, stringsAsFactors = FALSE)
+    if (nrow(diff.1)==21 & ncol(diff.1)<5){
+      diff.1 <- data.frame(t(diff.1))
+    }
     final <- diff.1[,c(1:7,10:14,16:20,8:9,15,21)]
-
     colnames(final) <- c("chromosome","position","ID","REF","ALT",
                        "QUAL","FILTER","END","HOMLEN","HOMSEQ",
                        "SVLEN","SVTYPE","Function","Gene.name","Gene.detail",
                        "Exonic.function","AAchange","info.1","info.2","Annovar.date","Allele.end")
-
     final[,c(8:17,21)] <- apply(final[,c(8:17,20)] ,2, function(x){gsub(".*=","",x)})
-
     pindel <- as.data.frame(final, stringsAsFactors = FALSE)
-
     pindel$SVLEN <- as.integer(pindel$END)-as.integer(pindel$position)
     dim(pindel)
     pindel <- pindel[pindel$SVLEN>=50,]
     dim(pindel)
     pindel <- pindel[complete.cases(pindel),]
-
     pindel.chr4 <- specific.region(pindel,"chrIV",1140000, 1170000)
     pindel.chr8 <- specific.region(pindel,"chrVIII", 5000, 120000)
     pindel.chr11 <- specific.region(pindel,"chrXI",400000,650000)
-
     write.csv(pindel,file=paste0(sampleNAME,"_pindel.xls"), row.names = FALSE)
-
   } else {
     print ("Pindel variable EMPTY")
   }
-
 } else {
   print ("Pindel file Empty")
-
 }
 
 #pindel.chr.4.8.11 <- as.data.frame(rbind(pindel.chr4,pindel.chr8,pindel.chr11))
 #kable(pindel.chr.4.8.11, caption = "pindel output for HXT6/7, DUR3 and GAP1 regions")
-
 ```
 
 ```{r,warning=FALSE,message=FALSE}
