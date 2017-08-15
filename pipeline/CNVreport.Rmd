@@ -332,9 +332,18 @@ pindel.chr.4.8.11 <- as.data.frame(rbind(pindel.chr4,pindel.chr8,pindel.chr11))
 
 ```{r,warning=FALSE,message=FALSE}
 
-merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE),
-                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE),
-                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))
+# merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE),
+#                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE),
+#                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))
+                               
+pre.pindel <- data.frame(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE), stringsAsFactors=F)
+pre.lumpy <- data.frame(cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE), stringsAsFactors=F)
+pre.svaba <- data.frame(cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE), stringsAsFactors=F)
+merged <- data.frame()
+if (length(pre.pindel)!=0){merged <- rbind(merged,pre.pindel)}
+if (length(pre.lumpy)!=0){merged <- rbind(merged,pre.lumpy)}
+if (length(pre.svaba)!=0){merged <- rbind(merged,pre.svaba)}
+
 colnames(merged) <- c("chromosome","position","SVLEN","SVTYPE")
 merged$chromosome <- as.character(merged$chromosome)
 merged$position <- as.integer(as.character(merged$position))
