@@ -26,6 +26,19 @@ library(dplyr)
 
 ```
 
+
+```{r,eval=FALSE}
+setwd("~/Google Drive/pipeline_folder/")
+
+svaba <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_svaba_annotated.vcf",sep="\t")
+lumpy <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_lumpy_annotated.vcf",sep="\t")
+pindel <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_pindel_annotated.vcf",sep="\t")
+IS.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_insert_size_metrics.txt",sep="\t")
+AL.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_alignment_metrics.txt",sep="\t")
+rd <- read_tsv("sample_023_RD.txt", col_names = FALSE)
+sample.name <- "test"
+```
+
 # Summary: Read depth, Alignment rate and Insert size metrics
 
 ```{r,eval=TRUE,message=FALSE,warning=FALSE}
@@ -451,3 +464,4 @@ kable(lumpy,caption = "Lumpy output")
 ```{r}
 sessionInfo()
 ```
+
