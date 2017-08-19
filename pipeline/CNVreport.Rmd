@@ -333,11 +333,9 @@ if (file.info(pindelFILE)$size > 30){
 ```
 
 ```{r,warning=FALSE,message=FALSE}
-
 # merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE),
 #                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE),
-#                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))
-                               
+#                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))                             
 pre.pindel <- data.frame(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE), stringsAsFactors=F)
 pre.lumpy <- data.frame(cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE), stringsAsFactors=F)
 pre.svaba <- data.frame(cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE), stringsAsFactors=F)
@@ -348,11 +346,6 @@ merged <- data.frame()
 if (dim(pre.pindel)[1]!=0){merged <- rbind(merged,pre.pindel)}
 if (dim(pre.lumpy)[1]!=0){merged <- rbind(merged,pre.lumpy)}
 if (dim(pre.svaba)[1]!=0){merged <- rbind(merged,pre.svaba)}
-
-
-
-
-
 colnames(merged) <- c("chromosome","position","SVLEN","SVTYPE")
 merged$chromosome <- as.character(merged$chromosome)
 merged$position <- as.integer(as.character(merged$position))
