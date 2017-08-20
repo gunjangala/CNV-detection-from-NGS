@@ -26,19 +26,6 @@ library(dplyr)
 
 ```
 
-
-```{r,eval=FALSE}
-setwd("~/Google Drive/pipeline_folder/")
-
-svaba <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_svaba_annotated.vcf",sep="\t")
-lumpy <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_lumpy_annotated.vcf",sep="\t")
-pindel <- read.table("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_pindel_annotated.vcf",sep="\t")
-IS.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_insert_size_metrics.txt",sep="\t")
-AL.file <- read.csv("/Users/gunjangala/Google Drive/pipeline_folder/sample_023_alignment_metrics.txt",sep="\t")
-rd <- read_tsv("sample_023_RD.txt", col_names = FALSE)
-sample.name <- "test"
-```
-
 # Summary: Read depth, Alignment rate and Insert size metrics
 
 ```{r,eval=TRUE,message=FALSE,warning=FALSE}
@@ -184,6 +171,7 @@ plot_region("8", 5000, 120000)
 plot_region("11", 400000, 665000)
 ```
 
+
 ```{r}
 specific.region <- function (data,chr,start,end){
   info <- data[data$chromosome==chr &
@@ -192,6 +180,19 @@ specific.region <- function (data,chr,start,end){
                      as.integer(as.character(data$SVLEN))) < end,]
   return (info)
 }
+
+gRange.object <- function (object){
+  object$chromosome <- as.character(object$chromosome)
+  object$position <- as.integer(object$position)
+  object$SVLEN <- as.integer(object$SVLEN)
+  chr <- object$chromosome
+  start <- (object$position)
+  len <- abs(object$SVLEN)
+  end <- start+len
+  gR <- GRanges(seqnames = chr, ranges = IRanges(start=start, end=end))
+  return (gR)
+}
+
 ```
 
 # CNV calls:
@@ -254,13 +255,13 @@ if (file.info(lumpyFILE)$size > 30){
     if (nrow(diff.1)==28 & ncol(diff.1)<5){
       diff.1 <- data.frame(t(diff.1))
     }
-    final <- diff.1[,c(1:7,10:13,18,23:27,19:21,8,9,14:17,22,28)]
+    final <- diff.1[,c(1:7,10:13,18,23:27,19:21,8,9,14:17,22)]
     colnames(final) <- c("chromosome","position","ID","REF","ALT",
                      "","STRANDS","SVTYPE","STRANDS","SVLEN",
                      "END","imprecise/homseq","Function","gene.name","gene.detail",
                      "exonic.function","AAChange","SU","PE","SR",
                      "info.1","info.2","CIPOS","CIEND","CIPOS95","CIEND95",
-                     "ANNOVAR.DATE","info.3")
+                     "ANNOVAR.DATE")
     final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] <- apply(final[,c(8,9,10,11,13,14,15,16,17,18,19,20,23,24,25,26,27)] ,2, function(x){gsub(".*=","",x)})
     lumpy <- as.data.frame(final, stringsAsFactors = FALSE)
     lumpy.NO.BND <-  lumpy[lumpy$SVTYPE!="BND",]
@@ -333,19 +334,29 @@ if (file.info(pindelFILE)$size > 30){
 ```
 
 ```{r,warning=FALSE,message=FALSE}
-# merged <- as.data.frame(rbind(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE),
-#                               cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE),
-#                               cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE)))                             
-pre.pindel <- data.frame(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE), stringsAsFactors=F)
-pre.lumpy <- data.frame(cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE), stringsAsFactors=F)
-pre.svaba <- data.frame(cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE), stringsAsFactors=F)
 merged <- data.frame()
-#if (length(pre.pindel)!=0){merged <- rbind(merged,pre.pindel)}
-#if (length(pre.lumpy)!=0){merged <- rbind(merged,pre.lumpy)}
-#if (length(pre.svaba)!=0){merged <- rbind(merged,pre.svaba)}
-if (dim(pre.pindel)[1]!=0){merged <- rbind(merged,pre.pindel)}
-if (dim(pre.lumpy)[1]!=0){merged <- rbind(merged,pre.lumpy)}
-if (dim(pre.svaba)[1]!=0){merged <- rbind(merged,pre.svaba)}
+
+if (exists("pindel")){
+  pre.pindel <- data.frame(cbind(pindel$chromosome,as.numeric(pindel$position),as.numeric(pindel$SVLEN),pindel$SVTYPE), stringsAsFactors=F)
+  if (dim(pre.pindel)[1]!=0){merged <- rbind(merged,pre.pindel)}
+}
+```
+
+```{r,warning=FALSE,message=FALSE}
+if (exists("lumpy")){
+  pre.lumpy <- data.frame(cbind(lumpy$chromosome,as.numeric(lumpy$position),as.numeric(lumpy$SVLEN),lumpy$SVTYPE), stringsAsFactors=F)
+  if (dim(pre.lumpy)[1]!=0){merged <- rbind(merged,pre.lumpy)}
+}
+```
+
+```{r,warning=FALSE,message=FALSE}
+if (exists("svaba")){
+  pre.svaba <- data.frame(cbind(svaba$chromosome,as.numeric(svaba$position),as.numeric(svaba$SVLEN),svaba$SVTYPE), stringsAsFactors=F)
+  if (dim(pre.svaba)[1]!=0){merged <- rbind(merged,pre.svaba)}
+}
+```
+
+```{r,warning=FALSE,message=FALSE}
 colnames(merged) <- c("chromosome","position","SVLEN","SVTYPE")
 merged$chromosome <- as.character(merged$chromosome)
 merged$position <- as.integer(as.character(merged$position))
@@ -353,27 +364,31 @@ merged$SVLEN <- as.integer(as.character(merged$SVLEN))
 merged$SVTYPE <- as.character(merged$SVTYPE)
 merged$SVTYPE[which(!is.na(as.Date(as.character(merged$SVTYPE),format="%Y-%m-%d")))] <- ""
 merged$SVTYPE[which(!is.na(as.numeric(merged$SVTYPE)))] <- "" 
-
-gRange.object <- function (object){
-  object$chromosome <- as.character(object$chromosome)
-  object$position <- as.integer(object$position)
-  object$SVLEN <- as.integer(object$SVLEN)
-  chr <- object$chromosome
-  start <- (object$position)
-  len <- abs(object$SVLEN)
-  end <- start+len
-  gR <- GRanges(seqnames = chr, ranges = IRanges(start=start, end=end))
-  return (gR)
-}
-
-pindel.GR <- gRange.object(pindel)
-lumpy.GR <- gRange.object(lumpy)
-svaba.GR <- gRange.object(svaba)
 merged.GR <- gRange.object(merged)
 
-pindel.vote <- sapply(countOverlaps(merged.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
-lumpy.vote <- sapply(countOverlaps(merged.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
-svaba.vote <- sapply(countOverlaps(merged.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+if (exists("pindel")){
+  pindel.GR <- gRange.object(pindel)
+  pindel.vote <- sapply(countOverlaps(merged.GR,pindel.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+} else {
+  pindel.vote <- 0
+}
+
+if (exists("lumpy")){
+  lumpy.GR <- gRange.object(lumpy)
+  lumpy.vote <- sapply(countOverlaps(merged.GR,lumpy.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+} else {
+  lumpy.vote <- 0
+}
+
+if (exists("svaba")){  
+  svaba.GR <- gRange.object(svaba)
+  svaba.vote <- sapply(countOverlaps(merged.GR,svaba.GR, type = "any"), function(x){if(x>0){return(2)}else{return(1)}})
+} else {
+  svaba.vote <- 0
+}
+```
+
+```{r,warning=FALSE,message=FALSE}
 
 votes <- NULL
 votes <- as.data.frame(cbind(as.character(merged$chromosome),as.integer(merged$position),(as.integer(merged$position)+as.integer(merged$SVLEN)),merged$SVLEN,merged$SVTYPE),stringsAsFactors=FALSE)
@@ -384,9 +399,9 @@ votes$end <- as.integer(as.character(votes$end))
 votes$length <- as.integer(as.character(votes$length))
 votes$type <- as.character(votes$type)
 
-votes$pindel <-(pindel.vote)
-votes$lumpy <-(lumpy.vote)
-votes$svaba <-(svaba.vote)
+#votes$pindel <-(pindel.vote)
+#votes$lumpy <-(lumpy.vote)
+#votes$svaba <-(svaba.vote)
 
 votes$pindel <- 0
 votes$lumpy <- 0
@@ -447,17 +462,17 @@ kable(CNV.call.1,caption = "CNVs detected by only 1 algorithm" )
 
 ## Pindel output
 ```{r}
-kable(pindel,caption = "Pindel output")
+if (exists("pindel")){kable(pindel,caption = "Pindel output")}
 ```
 
 ## SvABA output
 ```{r}
-kable(svaba,caption = "SvABA output")
+if (exists("svaba")){kable(svaba,caption = "SvABA output")}
 ```
 
 ## Lumpy output
 ```{r}
-kable(lumpy,caption = "Lumpy output")
+if (exists("lumpy")){kable(lumpy,caption = "Lumpy output")}
 ```
 
 # sessionInfo()
