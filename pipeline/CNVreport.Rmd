@@ -252,7 +252,7 @@ if (file.info(lumpyFILE)$size > 30){
     # if there is just one CNV called by algorithm, variable is a "list"
     # which interferes with further steps. Following "if" block of code prevents the error
     diff.1 <- as.data.frame(diff.1, stringsAsFactors = FALSE)
-    if (nrow(diff.1)==28 & ncol(diff.1)<5){
+    if (nrow(diff.1)>=27 & nrow(diff.1)<=28 & ncol(diff.1)<5){
       diff.1 <- data.frame(t(diff.1))
     }
     final <- diff.1[,c(1:7,10:13,18,23:27,19:21,8,9,14:17,22)]
