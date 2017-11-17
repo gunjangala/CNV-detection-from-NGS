@@ -174,7 +174,8 @@ less ${ID}_pindel*multianno.vcf | grep -v "#" > ${ID}_pindel_annotated.vcf
 
 ############ CNV summary and genome-wide analysis report ###############
 module purge
-module load r/intel/3.3.2
+# 11.17.17 - PS: Changed R package to run for Rscript. This fixes GenomicRanges issue in BioCondoctor package
+module load r/intel/3.4.2
 module load pandoc/gnu/1.19.2
 cp ${RUNDIR}/CNVreport.Rmd .
 Rscript -e "rmarkdown::render('CNVreport.Rmd')" ${ID}_lumpy_annotated.vcf ${ID}_pindel_annotated.vcf ${ID}_SvABA_annotated.vcf ${ID}_insert_size_metrics.txt ${ID}_alignment_metrics.txt ${ID}_RD.txt ${ID}
